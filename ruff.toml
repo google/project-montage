@@ -1,0 +1,49 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Format py files following Google style-guide
+line-length = 80
+indent-width = 2
+target-version = "py311"
+extend-include = ["*.ipynb"]
+
+[lint]
+select = ["E", "F", "B"]
+extend-select = [
+    # "D",   # pydocstyle
+    "I",   # isort
+    "UP",  # pyupssgrade
+    "SIM", # flake8-simplify
+    "T20", # flake8-print
+]
+fixable = ["ALL"]
+unfixable = ["B"]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.per-file-ignores]
+"__init__.py" = ["E402"]
+"**/{tests,docs,tools}/*" = ["E402"]
+"**/*.ipynb" = ["T20"]
+
+[format]
+exclude = ["*.pyi"]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[lint.pydocstyle]
+convention = "google"

@@ -1,0 +1,53 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ============================================================================
+# Project Montage - Model Configuration
+# ============================================================================
+#
+# This configuration file specifies the GenAI models used by the Project Montage
+# MCP server for media generation tasks including text, image, and video
+# creation. Each model can be customized to use different versions or variants
+# supported by Google's Vertex AI and Generative AI APIs.
+#
+# ============================================================================
+# Supported Models by Category
+# ============================================================================
+#
+# TEXT GENERATION (Gemini):
+#   - gemini-3.1-flash-lite (Default - balanced performance)
+#   - gemini-2.5-pro
+#   - gemini-2.5-flash
+#   - gemini-2.5-flash-lite
+#
+# IMAGE GENERATION & EDITING (Gemini):
+#   - gemini-2.5-flash-image
+#   - gemini-3.1-flash-image-preview (Recommended for Project Montage)
+#
+# VIDEO GENERATION (Veo):
+#   - veo-3.1-generate-001 (Recommended - higher quality)
+#   - veo-3.1-fast-generate-001 (Faster processing)
+#   - veo-3.1-generate-preview
+#   - veo-3.1-fast-generate-preview
+#
+# ============================================================================
+
+# Text generation model used for storyboard creation and prompt building
+gemini_model: gemini-3.1-flash-lite
+
+# Image generation and editing model
+gemini_image_model: gemini-2.5-flash-image
+
+# Video generation model
+veo_model: veo-3.1-generate-001

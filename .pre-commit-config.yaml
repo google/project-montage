@@ -1,0 +1,108 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+        files: '(\Dockerfile|\.css|\.html|\.py|\.sh|\.ts|\.tsx)$'
+      - id: check-toml
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: debug-statements
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.7
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.9.5
+    hooks:
+      - id: uv-lock
+        name: uv-lock (mcp_client)
+        files: ^mcp_client/pyproject\.toml$
+        args: ["--project", "mcp_client"]
+      - id: uv-export
+        name: uv-export (mcp_client)
+        files: ^mcp_client/(pyproject\.toml|uv\.lock)$
+        args:
+          [
+            "--project",
+            "mcp_client",
+            "--no-editable",
+            "--no-annotate",
+            "--no-hashes",
+            "-o",
+            "mcp_client/requirements.txt",
+          ]
+      - id: uv-lock
+        name: uv-lock (mcp_montage)
+        files: ^mcp_montage/pyproject\.toml$
+        args: ["--project", "mcp_montage"]
+      - id: uv-export
+        name: uv-export (mcp_montage)
+        files: ^mcp_montage/(pyproject\.toml|uv\.lock)$
+        args:
+          [
+            "--project",
+            "mcp_montage",
+            "--no-editable",
+            "--no-annotate",
+            "--no-hashes",
+            "-o",
+            "mcp_montage/requirements.txt",
+          ]
+      - id: uv-lock
+        name: uv-lock (sign_server)
+        files: ^sign_server/pyproject\.toml$
+        args: ["--project", "sign_server"]
+      - id: uv-export
+        name: uv-export (sign_server)
+        files: ^sign_server/(pyproject\.toml|uv\.lock)$
+        args:
+          [
+            "--project",
+            "sign_server",
+            "--no-editable",
+            "--no-annotate",
+            "--no-hashes",
+            "-o",
+            "sign_server/requirements.txt",
+          ]
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.8.6
+    hooks:
+      - id: bandit
+        args: ["-ll"]
+        files: .py$
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.5
+    hooks:
+      - id: shellcheck
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.3.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: []

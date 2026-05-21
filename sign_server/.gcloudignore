@@ -1,0 +1,8 @@
+# Ignore everything
+/[!.]*
+/.?*
+
+# Except the files we want to deploy
+!/app.yaml
+!/*.py
+!/requirements.txt
