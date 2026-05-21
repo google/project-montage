@@ -1,0 +1,1356 @@
+<!--
+ Copyright 2026 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Montage</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #09090b;
+    }
+
+    /* Core Skeuomorphic Surfaces */
+    .tactile-base {
+      background: linear-gradient(180deg, #18181b 0%, #09090b 100%);
+      box-shadow:
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.1),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+        0 20px 40px -10px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(0, 0, 0, 1);
+    }
+
+    .tactile-glass {
+      background: linear-gradient(135deg, rgba(39, 39, 42, 0.4) 0%, rgba(24, 24, 27, 0.6) 100%);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.15),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 10px 30px -5px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(0, 0, 0, 0.8);
+    }
+
+    .tactile-inset {
+      background: #09090b;
+      box-shadow:
+        inset 0 2px 10px rgba(0, 0, 0, 0.8),
+        inset 0 0 0 1px rgba(0, 0, 0, 1),
+        0 1px 1px rgba(255, 255, 255, 0.05);
+    }
+
+    /* Command Center Custom Panels */
+    .cmd-panel {
+      background: #111113;
+      border-radius: 1rem;
+      box-shadow:
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+        0 15px 30px -5px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(0, 0, 0, 0.9);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cmd-panel-header {
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .cmd-panel-body {
+      padding: 1rem 1.25rem;
+    }
+
+    @keyframes radar-sweep {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .radar-sweep {
+      background: conic-gradient(from 0deg, transparent 70%, rgba(16, 185, 129, 0.1) 90%, rgba(16, 185, 129, 0.6) 100%);
+      animation: radar-sweep 4s linear infinite;
+    }
+
+    /* Physical Buttons */
+    .btn-physical-accent {
+      background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+      color: #ffffff;
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 0.4),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.2),
+        0 4px 10px rgba(99, 102, 241, 0.3),
+        0 0 0 1px #4f46e5;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-physical-accent:hover {
+      background: linear-gradient(180deg, #a5b4fc 0%, #818cf8 100%);
+    }
+
+    .btn-physical-accent:active {
+      transform: translateY(2px);
+      box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.3),
+        inset 0 0 0 1px #4338ca,
+        0 0 0 rgba(0, 0, 0, 0);
+    }
+
+    .btn-physical-dark {
+      background: linear-gradient(180deg, #27272a 0%, #18181b 100%);
+      box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.15),
+        inset 0 -1px 1px rgba(0, 0, 0, 0.5),
+        0 4px 10px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(0, 0, 0, 1);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-physical-dark:hover {
+      background: linear-gradient(180deg, #3f3f46 0%, #27272a 100%);
+    }
+
+    .btn-physical-dark:active {
+      transform: translateY(2px);
+      box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.8),
+        inset 0 0 0 1px rgba(0, 0, 0, 1),
+        0 0 0 rgba(0, 0, 0, 0);
+    }
+
+    .btn-physical-light {
+      background: linear-gradient(180deg, #f4f4f5 0%, #e4e4e7 100%);
+      color: #09090b;
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 1),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.1),
+        0 4px 10px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(0, 0, 0, 0.8);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-physical-light:hover {
+      background: linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%);
+    }
+
+    .btn-physical-light:active {
+      transform: translateY(2px);
+      box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.2),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.8),
+        0 0 0 rgba(0, 0, 0, 0);
+    }
+
+    /* New CTA Styles */
+    .cta-input {
+      background: #09090b;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 0.85rem 1.75rem;
+      border-radius: 9999px;
+      outline: none;
+      font-family: 'Space Mono', monospace;
+      width: 280px;
+      text-align: center;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .cta-input:focus {
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.8), 0 0 30px rgba(99, 102, 241, 0.15);
+      width: 310px;
+    }
+
+    .cta-gradient-btn {
+      background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+      color: white;
+      padding: 0.85rem 3rem;
+      border-radius: 9999px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .cta-gradient-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 35px -5px rgba(79, 70, 229, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      filter: brightness(1.1);
+    }
+
+    .cta-gradient-btn:active {
+      transform: translateY(1px);
+    }
+
+    .cta-gradient-btn:disabled {
+      background: #d1d5db;
+      color: #9ca3af;
+
+      /* Remove the shadow and gradient intensity */
+      box-shadow: none;
+      filter: none;
+
+      /* Indicate "Not Allowed" */
+      cursor: not-allowed;
+      opacity: 0.7;
+
+      /* Prevent movement/animations */
+      transform: none;
+      pointer-events: none;
+      /* Stops all hover/active states from firing */
+    }
+
+    /* Optional: Ensure hover effects don't trigger if the button is disabled */
+    .cta-gradient-btn:disabled:hover {
+      transform: none;
+      filter: none;
+      box-shadow: none;
+    }
+
+    /* Custom focus state in the <style> block */
+    input:focus {
+      outline: none;
+      border-color: #7c3aed;
+      /* Purple and blue highlight when clicked */
+    }
+
+    .btn-gradient {
+      background: linear-gradient(to right, #6366f1, #a855f7);
+      transition: transform 0.1s, opacity 0.2s, filter 0.2s;
+      /* Smooths the movement and color changes */
+    }
+
+    /* Hover State: The "Lift" and "Brightness" */
+    .btn-gradient:hover {
+      filter: brightness(1.1);
+      /* Makes the colors pop/glow */
+      transform: translateY(-1px);
+      /* Moves the button up slightly */
+    }
+
+    /* Pressed State: The "Scale" and "Darkening" */
+    .btn-gradient:active {
+      transform: scale(0.95);
+      /* Shrinks the button slightly as if pushed in */
+      filter: brightness(0.9);
+      /* Darkens it to simulate a shadow/depth */
+    }
+
+
+    /* Hardware Toggles & Sliders */
+    .hw-toggle-track {
+      background: #000;
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 1), inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 1px rgba(255, 255, 255, 0.1);
+    }
+
+    .hw-toggle-thumb {
+      background: linear-gradient(180deg, #3f3f46 0%, #27272a 100%);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3), 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 0 1px #000;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    input:checked+.hw-toggle-track .hw-toggle-thumb {
+      transform: translateX(100%);
+    }
+
+    input:checked+.hw-toggle-track {
+      background: #09090b;
+    }
+
+    /* Animations */
+    .scroll-animate {
+      opacity: 0;
+      transform: translateY(40px) scale(0.98);
+      filter: blur(8px);
+      transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 1s cubic-bezier(0.16, 1, 0.3, 1),
+        filter 1s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .scroll-animate.is-visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    @keyframes text-slide {
+
+      0%,
+      20% {
+        transform: translateY(0%);
+      }
+
+      33%,
+      53% {
+        transform: translateY(-25%);
+      }
+
+      66%,
+      86% {
+        transform: translateY(-50%);
+      }
+
+      100% {
+        transform: translateY(-75%);
+      }
+    }
+
+    .animate-text-slide {
+      animation: text-slide 8s cubic-bezier(0.83, 0, 0.17, 1) infinite;
+    }
+
+    @keyframes pulse-glow {
+
+      0%,
+      100% {
+        opacity: 0.4;
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+      }
+
+      50% {
+        opacity: 0.8;
+        box-shadow: 0 0 40px rgba(99, 102, 241, 0.5);
+      }
+    }
+
+    .led-glow {
+      animation: pulse-glow 3s ease-in-out infinite;
+    }
+
+    .wire-texture {
+      background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.01) 0px, rgba(255, 255, 255, 0.01) 1px, transparent 1px, transparent 10px);
+    }
+
+    /* Map Pulsing Nodes */
+    @keyframes map-pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6);
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      70% {
+        box-shadow: 0 0 0 15px rgba(99, 102, 241, 0);
+        transform: translate(-50%, -50%) scale(1.2);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+        transform: translate(-50%, -50%) scale(1);
+      }
+    }
+
+    .map-node {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: #818cf8;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: map-pulse 2.5s infinite;
+    }
+  </style>
+
+
+  <link id="all-fonts-link-font-geist" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-geist">
+    .font-geist {
+      font-family: 'Geist', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-roboto" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-roboto">
+    .font-roboto {
+      font-family: 'Roboto', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-montserrat" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-montserrat">
+    .font-montserrat {
+      font-family: 'Montserrat', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-poppins" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-poppins">
+    .font-poppins {
+      font-family: 'Poppins', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-playfair" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;900&amp;display=swap">
+  <style id="all-fonts-style-font-playfair">
+    .font-playfair {
+      font-family: 'Playfair Display', serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-instrument-serif" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Instrument+Serif:wght@400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-instrument-serif">
+    .font-instrument-serif {
+      font-family: 'Instrument Serif', serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-merriweather" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700;900&amp;display=swap">
+  <style id="all-fonts-style-font-merriweather">
+    .font-merriweather {
+      font-family: 'Merriweather', serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-bricolage" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-bricolage">
+    .font-bricolage {
+      font-family: 'Bricolage Grotesque', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-jakarta" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap">
+  <style id="all-fonts-style-font-jakarta">
+    .font-jakarta {
+      font-family: 'Plus Jakarta Sans', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-manrope" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap">
+  <style id="all-fonts-style-font-manrope">
+    .font-manrope {
+      font-family: 'Manrope', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-space-grotesk" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-space-grotesk">
+    .font-space-grotesk {
+      font-family: 'Space Grotesk', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-work-sans" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700;800&amp;display=swap">
+  <style id="all-fonts-style-font-work-sans">
+    .font-work-sans {
+      font-family: 'Work Sans', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-pt-serif" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=PT+Serif:wght@400;700&amp;display=swap">
+  <style id="all-fonts-style-font-pt-serif">
+    .font-pt-serif {
+      font-family: 'PT Serif', serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-geist-mono" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-geist-mono">
+    .font-geist-mono {
+      font-family: 'Geist Mono', monospace !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-space-mono" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&amp;display=swap">
+  <style id="all-fonts-style-font-space-mono">
+    .font-space-mono {
+      font-family: 'Space Mono', monospace !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-quicksand" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-quicksand">
+    .font-quicksand {
+      font-family: 'Quicksand', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-nunito" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&amp;display=swap">
+  <style id="all-fonts-style-font-nunito">
+    .font-nunito {
+      font-family: 'Nunito', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-newsreader" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..800&amp;display=swap">
+  <style id="all-fonts-style-font-newsreader">
+    .font-newsreader {
+      font-family: 'Newsreader', serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-google-sans-flex" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-google-sans-flex">
+    .font-google-sans-flex {
+      font-family: 'Google Sans Flex', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-oswald" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-oswald">
+    .font-oswald {
+      font-family: 'Oswald', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-dm-sans" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-dm-sans">
+    .font-dm-sans {
+      font-family: 'DM Sans', sans-serif !important;
+    }
+  </style>
+  <link id="all-fonts-link-font-cormorant" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&amp;display=swap">
+  <style id="all-fonts-style-font-cormorant">
+    .font-cormorant {
+      font-family: 'Cormorant Garamond', serif !important;
+    }
+  </style>
+</head>
+
+<body class="text-zinc-400 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 overflow-x-hidden mesh-bg">
+  <!-- Ambient physical backdrop -->
+  <div
+    class="fixed inset-0 -z-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-50">
+  </div>
+  <div class="fixed inset-0 -z-10 bg-gradient-to-b from-transparent via-zinc-950/80 to-zinc-950 pointer-events-none">
+  </div>
+
+  <!-- THREE.JS -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" class=""></script>
+
+  <!-- Hero / Cinematic Track (Section 1) -->
+  <div id="hero-track" class="relative w-full" style="height: 350vh;">
+    <section id="hero"
+      class="sticky top-0 h-screen w-full overflow-hidden flex flex-col relative items-center justify-center pt-24 pb-12">
+      <style class="">
+        @keyframes bgPan {
+          0% {
+            background-position: 0 0;
+          }
+
+          100% {
+            background-position: 40px 40px;
+          }
+        }
+
+        @keyframes blinkNode {
+
+          0%,
+          100% {
+            background: #27272a;
+          }
+
+          50% {
+            background: #6366f1;
+            box-shadow: 0 0 10px #6366f1;
+          }
+        }
+
+        @keyframes nodeFloat1 {
+
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+
+          50% {
+            transform: translateY(-6px);
+          }
+        }
+
+        @keyframes nodeFloat2 {
+
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+
+          50% {
+            transform: translateY(-4px);
+          }
+        }
+
+        @keyframes dataFlow {
+          0% {
+            left: -10%;
+            opacity: 0;
+          }
+
+          20%,
+          80% {
+            opacity: 1;
+          }
+
+          100% {
+            left: 110%;
+            opacity: 0;
+          }
+        }
+
+        .hero-webgl-threejs {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          background: #050507;
+          /* Deeper space background */
+        }
+
+        .hero-webgl-threejs canvas {
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+
+        .hero-fog {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          background:
+            radial-gradient(circle at 50% 50%, transparent 0%, rgba(5, 5, 7, 0.05) 40%, rgba(5, 5, 7, 0.95) 100%),
+            linear-gradient(to bottom, transparent 0%, rgba(5, 5, 7, 0.2) 60%, rgba(5, 5, 7, 1) 100%);
+          pointer-events: none;
+        }
+
+        .hero-content {
+          position: relative;
+          z-index: 10;
+          width: 100%;
+          transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+        }
+
+        .hero-cta {
+          position: absolute;
+          z-index: 30;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          opacity: 0;
+          pointer-events: none;
+          text-align: center;
+        }
+      </style>
+
+      <!-- 3D GRID & BLACK HOLE -->
+      <div class="hero-webgl-threejs">
+        <canvas data-engine="three.js r160" width="1440" height="949" style="width: 1440px; height: 949px" class=""
+          id="hero3D">
+        </canvas>
+      </div>
+      <div class="hero-fog">
+
+      </div>
+
+      <!-- HERO TEXT -->
+      <div
+        class="sm:px-6 lg:px-8 hero-content z-20 sm:pt-24 md:pt-28 text-center max-w-7xl mr-auto ml-auto pt-20 pr-4 pl-4 relative"
+        style=" pointer-events: auto;">
+        <div
+          class="inline-flex gap-3 tactile-glass text-xs text-zinc-300 rounded-full mb-8 pt-1.5 pr-3 pb-1.5 pl-3 shadow-2xl gap-x-3 gap-y-3 items-center">
+          AI-Native Video Production Suite<span
+            class="relative inline-flex h-2 w-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,1)]"></span>
+        </div>
+
+        <h1
+          class="mx-auto max-w-5xl text-4xl sm:text-6xl lg:text-[5.2rem] font-normal tracking-tight text-zinc-50 leading-[0.95] drop-shadow-[0_10px_40px_rgba(0,0,0,0.7)]">
+          <span class="block">Project Montage</span>
+
+        </h1>
+
+        <p class="sm:text-lg text-base text-zinc-200 max-w-2xl mt-8 mr-auto ml-auto">We built this prototype using
+          Nano Banana, Veo, and ADK as a showcase of how to combine different Google technologies into a video
+          generation tool.
+        </p>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="sm:px-6 lg:px-8 w-full max-w-5xl mt-20 mx-auto hero-content relative"
+        style="pointer-events: auto; transform: scale(1) translateY(0px); opacity: 1;">
+        <div
+          class="tilt-element relative w-full aspect-[16/9] md:aspect-[21/9] tactile-base rounded-3xl p-3 md:p-6 flex flex-col shadow-[0_40px_100px_-20px_rgba(0,0,0,1)]">
+          <div
+            class="flex-1 tactile-inset rounded-2xl p-1 relative overflow-hidden flex flex-col border border-zinc-800/50">
+            <!-- TOP BAR -->
+            <div
+              class="flex bg-zinc-950/80 h-12 border-zinc-900 border-b pr-4 pl-4 backdrop-blur-md items-center justify-between">
+              <div class="flex gap-2 items-center">
+                <div class="flex gap-1.5 mr-4">
+                  <div class="w-3 h-3 rounded-full bg-zinc-800" style="animation:blinkNode 2s infinite"></div>
+                  <div class="w-3 h-3 rounded-full bg-zinc-800" style="animation:blinkNode 2s infinite .4s"></div>
+                  <div class="w-3 h-3 rounded-full bg-zinc-800" style="animation:blinkNode 2s infinite .8s"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- UI CONTENT -->
+            <div
+              class="flex-1 flex gap-8 overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTAgNDBoNDBWMIgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik0wIDQwaDQwVjBIMHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAyKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+')] pt-8 pr-8 pb-8 pl-8 relative gap-x-8 gap-y-8 items-center justify-center"
+              style="animation:bgPan 15s linear infinite">
+              <div style="animation:nodeFloat1 4s ease-in-out infinite" class="">
+                <div
+                  class="tactile-base flex flex-col w-32 h-32 border-zinc-700/50 rounded-2xl border-t shadow-2xl relative overflow-hidden group">
+                  <img
+                    src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/variants/ad95900e-80c7-465e-ac56-e16d93c9fa55/320w.png"
+                    alt="Visual representation"
+                    class="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-300">
+                  <div
+                    class="bg-gradient-to-t from-[#09090b] via-[#09090b]/40 to-transparent absolute top-0 right-0 bottom-0 left-0">
+                  </div>
+                  <div class="absolute bottom-2.5 left-0 right-0 flex justify-center items-center gap-1.5 z-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                      class="text-zinc-300">
+                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                      <circle cx="9" cy="9" r="2"></circle>
+                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+                    </svg>
+                    <span class="uppercase text-[10px] text-zinc-300 font-mono tracking-wider font-medium">image</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="h-2 w-32 tactile-inset rounded-full relative overflow-hidden flex items-center px-1">
+                <div class="h-0.5 w-full bg-zinc-800 rounded-full"></div>
+                <div class="absolute left-0 h-0.5 w-1/3 bg-indigo-500 rounded-full shadow-[0_0_10px_#6366f1]">
+                </div>
+                <div class="absolute top-1/2 -translate-y-1/2 h-1 w-3 bg-white rounded-full shadow-[0_0_8px_#fff]"
+                  style="animation:dataFlow 1.5s linear infinite"></div>
+              </div>
+
+              <div style="animation:nodeFloat2 3.5s ease-in-out infinite .5s" class="">
+                <div
+                  class="tactile-base flex flex-col gap-2 w-24 h-24 border-zinc-700/50 rounded-2xl border-t shadow-2xl gap-x-2 gap-y-2 items-center justify-center">
+                  <div class="uppercase text-xs text-zinc-500 font-mono">Video</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTA SECTION -->
+      <div class="hero-cta w-full max-w-md">
+        <input id="user-id-input" type="text"
+          class="w-full px-6 py-4 bg-white/5 border border-white/20 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all mx-[0px] mt-[0px] mb-[8px]" />
+        <p class="text-white-700 text-[#b9b9b9] text-center mx-[0px] mt-[0px] mb-[16px] text-[14px]">
+          Remember your name and use it next time</p>
+        <button id="open-chat"
+          class="w-full bg-indigo-500 hover:bg-indigo-700 rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/20 hover:shadow-indigo-600/40 text-white font-bold px-[24px] py-[16px] mx-[0px] mt-[16px] mb-[0px]">
+          Get started
+        </button>
+      </div>
+
+      <script src="/static/utils.js"></script>
+      <script>
+        const userIdInput = document.getElementById("user-id-input");
+        const openChatButton = document.getElementById("open-chat");
+
+        const updateRandomName = () => {
+          const randomName = generateRandomUserId();
+          userIdInput.value = randomName;
+        }
+
+        const updateButtonState = () => {
+          const hasUserId = userIdInput.value.trim().length > 0;
+          openChatButton.disabled = !hasUserId;
+        };
+
+        const createSession = async (userId) => {
+          const response = await fetch("/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId }),
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || "Failed to create session");
+          }
+          return response.json();
+        };
+
+        userIdInput.addEventListener("input", updateButtonState);
+        userIdInput.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") {
+            return;
+          }
+          event.preventDefault();
+          if (!openChatButton.disabled) {
+            openChatButton.click();
+          }
+        });
+        updateRandomName();
+        updateButtonState();
+
+        openChatButton.addEventListener("click", async () => {
+          const userId = userIdInput.value.trim();
+          if (!userId) {
+            updateButtonState();
+            return;
+          }
+
+          openChatButton.disabled = true;
+          openChatButton.textContent = "Starting session...";
+
+          try {
+            const session = await createSession(userId);
+            const bypass = session.bypass === "true";
+            const sessionId = session.id;
+            if (!bypass && !sessionId) {
+              throw new Error("Session id missing from response");
+            }
+            const redirectUrl = bypass
+              ? `/dev-ui/?app=project_montage&userId=${encodeURIComponent(userId)}`
+              : `/dev-ui/?app=project_montage&session=${encodeURIComponent(sessionId)}&userId=${encodeURIComponent(userId)}`;
+            window.location.assign(redirectUrl);
+          } catch (error) {
+            openChatButton.textContent = "Start Session";
+            updateButtonState();
+          }
+        });
+      </script>
+
+      <!-- THREE.JS CINEMATIC BLACK HOLE SCRIPT -->
+      <script>
+        (function () {
+          const canvas = document.getElementById("hero3D");
+          if (!canvas || !window.THREE) return;
+
+          const scene = new THREE.Scene();
+          // Richer, deeper fog for better cinematic immersion
+          scene.fog = new THREE.FogExp2(0x050507, 0.015);
+
+          const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+          camera.position.set(0, 8, 20);
+
+          const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          renderer.setSize(window.innerWidth, window.innerHeight);
+
+          /* ==========================================
+             IMPROVED CINEMATIC BLACK HOLE
+             ========================================== */
+          const bhUniforms = {
+            uTime: { value: 0 },
+            uScroll: { value: 0 }
+          };
+
+          const bhMaterial = new THREE.ShaderMaterial({
+            uniforms: bhUniforms,
+            vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+            fragmentShader: `
+            uniform float uTime;
+            uniform float uScroll;
+            varying vec2 vUv;
+
+            float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+            float noise(vec2 p) {
+              vec2 i = floor(p);
+              vec2 f = fract(p);
+              vec2 u = f*f*(3.0-2.0*f);
+              return mix(mix(hash(i + vec2(0.0,0.0)), hash(i + vec2(1.0,0.0)), u.x),
+                         mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), u.x), u.y);
+            }
+
+            float fbm(vec2 p) {
+              float v = 0.0;
+              float a = 0.5;
+              mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
+              for (int i = 0; i < 6; i++) {
+                v += a * noise(p);
+                p = rot * p * 2.0;
+                a *= 0.5;
+              }
+              return v;
+            }
+
+            void main() {
+              vec2 uv = vUv * 2.0 - 1.0;
+              float r = length(uv);
+
+              // Absolute Event Horizon
+              float coreRadius = 0.18;
+              float core = smoothstep(coreRadius + 0.02, coreRadius, r);
+
+              // Extreme Gravitational Lensing
+              float warpFactor = 0.12 / (r + 0.01);
+              vec2 warpedUv = uv + normalize(uv) * warpFactor;
+              float warpedR = length(warpedUv);
+              float warpedAngle = atan(warpedUv.y, warpedUv.x);
+
+              float swirlSpeed = uTime * 0.08;
+              float swirl = warpedAngle - warpedR * 2.5 + swirlSpeed;
+
+              // High-Definition Accretion Disk
+              vec2 noiseCoords = vec2(cos(swirl), sin(swirl)) * 1.8 - vec2(uTime * 0.02);
+              float n1 = fbm(noiseCoords * 2.5);
+              float n2 = fbm(noiseCoords * 5.0 + uTime * 0.04);
+
+              float diskMask = smoothstep(0.9, coreRadius, r);
+              float innerGlowMask = smoothstep(coreRadius + 0.3, coreRadius, r);
+
+              float intensity = (n1 * 0.5 + 0.5) * diskMask;
+              float highlight = (n2 * 0.5 + 0.5) * innerGlowMask * 2.0;
+
+              // Cinematic Deep Indigo Palette
+              vec3 deepSpace = vec3(0.01, 0.01, 0.02);
+              vec3 darkViolet = vec3(0.19, 0.18, 0.5); // Adjusted to Indigo
+              vec3 plasmaBlue = vec3(0.39, 0.4, 0.95); // Adjusted to Indigo 500
+              vec3 coreWhite = vec3(0.9, 0.95, 1.0);
+
+              vec3 color = mix(deepSpace, darkViolet, intensity * 1.5);
+              color = mix(color, plasmaBlue, highlight * 0.9);
+              color += coreWhite * pow(innerGlowMask, 4.0) * (0.3 + 0.7 * sin(swirlSpeed * 3.0 + warpedR * 15.0));
+
+              // Pitch black core override
+              color = mix(color, vec3(0.0), core);
+
+              float alpha = (intensity + highlight) * diskMask;
+              alpha = max(alpha, core);
+              alpha *= smoothstep(1.0, 0.5, r); // Smoother fade at edges
+
+              // Glow amplifies as we scroll closer
+              float scrollGlow = 1.0 + uScroll * 0.4;
+              float pulse = 0.95 + 0.05 * sin(uTime * 0.5);
+
+              gl_FragColor = vec4(color * scrollGlow * pulse, alpha);
+            }
+          `,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.NormalBlending,
+            fog: false
+          });
+
+          // Massive scale, pushed lower and further back for cinematic depth
+          const bhGeo = new THREE.PlaneGeometry(180, 180);
+          const bhMesh = new THREE.Mesh(bhGeo, bhMaterial);
+          bhMesh.position.set(0, 12, -45);
+          bhMesh.renderOrder = -2;
+          scene.add(bhMesh);
+
+          /* ==========================================
+             INTERACTIVE VOLUMETRIC FOG
+             ========================================== */
+          const smokeCanvas = document.createElement('canvas');
+          smokeCanvas.width = 512;
+          smokeCanvas.height = 512;
+          const ctx = smokeCanvas.getContext('2d');
+          const gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 256);
+          gradient.addColorStop(0, 'rgba(255, 255, 255, 0.18)');
+          gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.05)');
+          gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, 512, 512);
+          const smokeTex = new THREE.CanvasTexture(smokeCanvas);
+
+          const smokePlanes = [];
+          const smokeGeo = new THREE.PlaneGeometry(100, 100);
+
+          for (let i = 0; i < 40; i++) {
+            let color = new THREE.Color();
+            let rand = Math.random();
+            if (rand < 0.4) color.setHex(0x312e81);      // indigo 900
+            else if (rand < 0.7) color.setHex(0x4338ca); // indigo 700
+            else color.setHex(0x050508);                // pitch shadow
+
+            const smokeMat = new THREE.MeshBasicMaterial({
+              map: smokeTex,
+              color: color,
+              transparent: true,
+              opacity: Math.random() * 0.5 + 0.1,
+              depthWrite: false,
+              blending: THREE.NormalBlending
+            });
+
+            const plane = new THREE.Mesh(smokeGeo, smokeMat);
+            plane.position.set(
+              (Math.random() - 0.5) * 140,
+              (Math.random() - 0.5) * 80 + 5,
+              -10 - Math.random() * 30
+            );
+            plane.rotation.z = Math.random() * Math.PI * 2;
+            // Store base behaviors
+            plane.userData = {
+              rotSpeed: (Math.random() - 0.5) * 0.002,
+              driftX: (Math.random() - 0.5) * 0.015,
+              driftY: (Math.random() - 0.5) * 0.01,
+              baseOpacity: smokeMat.opacity,
+              phaseOffset: Math.random() * Math.PI * 2,
+              baseX: plane.position.x,
+              baseY: plane.position.y
+            };
+            plane.renderOrder = -1;
+            scene.add(plane);
+            smokePlanes.push(plane);
+          }
+
+          /* ==========================================
+             HORIZON GRID
+             ========================================== */
+          const gridUniforms = {
+            uColor: { value: new THREE.Color(0x6366f1) }, // indigo 500
+            uOpacity: { value: 0.0 }
+          };
+
+          const gridMaterial = new THREE.ShaderMaterial({
+            uniforms: gridUniforms,
+            vertexShader: `
+            varying vec3 vWorldPosition;
+            void main() {
+              vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+              vWorldPosition = worldPosition.xyz;
+              gl_Position = projectionMatrix * viewMatrix * worldPosition;
+            }
+          `,
+            fragmentShader: `
+            uniform vec3 uColor;
+            uniform float uOpacity;
+            varying vec3 vWorldPosition;
+
+            void main() {
+              vec2 coord = vWorldPosition.xz * 0.55;
+              vec2 grid = abs(fract(coord - 0.5) - 0.5) / (fwidth(coord) * 1.6);
+              float line = min(grid.x, grid.y);
+              float alpha = max(0.0, 1.0 - line);
+
+              float dist = length(vWorldPosition.xyz - cameraPosition);
+              float fade = 1.0 - smoothstep(12.0, 70.0, dist);
+
+              gl_FragColor = vec4(uColor, alpha * fade * uOpacity);
+            }
+          `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            extensions: { derivatives: true }
+          });
+
+          const planeGeo = new THREE.PlaneGeometry(240, 240);
+          planeGeo.rotateX(-Math.PI / 2);
+          const gridPlane = new THREE.Mesh(planeGeo, gridMaterial);
+          gridPlane.position.y = -4;
+          scene.add(gridPlane);
+
+          /* ==========================================
+             PARTICLE FIELD
+             ========================================== */
+          const pGeo = new THREE.BufferGeometry();
+          const pts = [];
+          const vels = [];
+          for (let i = 0; i < 600; i++) {
+            pts.push((Math.random() - .5) * 150, (Math.random() - .5) * 80 + 5, (Math.random() - .5) * 100 - 15);
+            vels.push(Math.random() * 0.015 + 0.005);
+          }
+          pGeo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+          pGeo.setAttribute("aSpeed", new THREE.Float32BufferAttribute(vels, 1));
+
+          const pMat = new THREE.PointsMaterial({
+            color: 0xc7d2fe, // brighter violet-white (indigo-200)
+            size: 0.02,
+            transparent: true,
+            opacity: 0.3,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+          });
+          const glow = new THREE.Points(pGeo, pMat);
+          scene.add(glow);
+
+          /* ==========================================
+             INTERACTION & PARALLAX
+             ========================================== */
+          let mouseX = 0, mouseY = 0;
+          let targetX = 0, targetY = 0;
+
+          window.addEventListener("mousemove", (e) => {
+            targetX = (e.clientX / window.innerWidth - 0.5);
+            targetY = (e.clientY / window.innerHeight - 0.5);
+          });
+
+          let scrollP = 0, targetScrollP = 0;
+          const heroTrack = document.getElementById("hero-track");
+
+          window.addEventListener("scroll", () => {
+            if (heroTrack) {
+              const rect = heroTrack.getBoundingClientRect();
+              // Calculate progress through the sticky track
+              const maxScroll = rect.height - window.innerHeight;
+              let progress = -rect.top / maxScroll;
+              targetScrollP = Math.min(1, Math.max(0, progress));
+            } else {
+              targetScrollP = Math.min(1, Math.max(0, window.scrollY / window.innerHeight));
+            }
+          });
+
+          window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+          });
+
+          const clock = new THREE.Clock();
+          const heroContents = document.querySelectorAll('.hero-content');
+          const heroCTA = document.querySelector('.hero-cta');
+
+          function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsed = clock.getElapsedTime();
+            bhUniforms.uTime.value = elapsed;
+
+            // Smooth mouse interpolation
+            mouseX += (targetX - mouseX) * 0.05;
+            mouseY += (targetY - mouseY) * 0.05;
+
+            // Fade grid out as we fly in
+            const targetGridOpacity = 0.06 * (1.0 - scrollP);
+            gridMaterial.uniforms.uOpacity.value += (targetGridOpacity - gridMaterial.uniforms.uOpacity.value) * 0.05;
+
+            scrollP += (targetScrollP - scrollP) * 0.04;
+            bhUniforms.uScroll.value = scrollP;
+
+            /* --- Cinematic Camera Dive --- */
+            // Pushes the camera deep into the Z axis towards the black hole
+            const baseZ = 20 - scrollP * 65;
+            const baseY = 8 - scrollP * 6;
+            const baseX = scrollP * 2;
+
+            camera.position.z += (baseZ - camera.position.z) * 0.06;
+            camera.position.y += ((baseY - mouseY * 2.0) - camera.position.y) * 0.06;
+            camera.position.x += ((baseX + mouseX * 3.0) - camera.position.x) * 0.06;
+
+            // Warp FOV for "lightspeed" effect
+            const targetFov = 60 + scrollP * 45;
+            camera.fov += (targetFov - camera.fov) * 0.06;
+            camera.updateProjectionMatrix();
+
+            // Camera looks dynamically based on mouse and scroll
+            camera.lookAt(
+              mouseX * 4.0,
+              bhMesh.position.y - 4 + scrollP * 12,
+              -20 - scrollP * 30
+            );
+
+            gridPlane.position.x = camera.position.x;
+            gridPlane.position.z = camera.position.z;
+
+            bhMesh.lookAt(camera.position);
+
+            /* --- Update HTML Content Scaling and Fading --- */
+            heroContents.forEach(el => {
+              const scale = 1 + scrollP * 1.5;
+              const opacity = 1 - scrollP * 2.5; // Fades out quicker to clear the view
+              el.style.transform = `scale(${scale}) translateY(${scrollP * -80}px)`;
+              el.style.opacity = Math.max(0, opacity);
+              el.style.pointerEvents = opacity <= 0 ? 'none' : 'auto';
+            });
+
+            // CTA Fades In
+            // Logic: Starts appearing at 25% scroll, fully visible by 60%
+            const ctaStart = 0.25;
+            const ctaEnd = 0.6;
+            const ctaOpacity = (scrollP - ctaStart) / (ctaEnd - ctaStart);
+            const finalCtaOpacity = Math.min(1, Math.max(0, ctaOpacity));
+
+            heroCTA.style.opacity = finalCtaOpacity;
+            heroCTA.style.transform = `translate(-50%, calc(-50% + ${(1 - finalCtaOpacity) * 40}px))`;
+            heroCTA.style.pointerEvents = finalCtaOpacity > 0.5 ? 'auto' : 'none';
+
+            /* --- Interactive Volumetric Fog --- */
+            // Map mouse roughly to scene coordinates
+            let sceneMouseX = mouseX * 80;
+            let sceneMouseY = -mouseY * 50 + 10;
+
+            smokePlanes.forEach((plane) => {
+              // Drift logic
+              plane.userData.baseX += plane.userData.driftX;
+              plane.userData.baseY += plane.userData.driftY;
+
+              // Interactive logic: Fog repels subtly from the cursor
+              let dx = plane.position.x - sceneMouseX;
+              let dy = plane.position.y - sceneMouseY;
+              let dist = Math.sqrt(dx * dx + dy * dy);
+
+              let repelX = 0, repelY = 0;
+              if (dist < 30) {
+                let force = (30 - dist) / 30;
+                repelX = (dx / dist) * force * 5;
+                repelY = (dy / dist) * force * 5;
+                plane.rotation.z += force * 0.01; // swirling reaction
+              }
+
+              // Spring back to base position
+              plane.position.x += ((plane.userData.baseX + repelX) - plane.position.x) * 0.05;
+              plane.position.y += ((plane.userData.baseY + repelY) - plane.position.y) * 0.05;
+              plane.rotation.z += plane.userData.rotSpeed;
+
+              // Opacity pulses
+              const wave = Math.sin(plane.position.x * 0.02 + elapsed * 0.3 + plane.userData.phaseOffset);
+              plane.material.opacity = plane.userData.baseOpacity + (wave * 0.1);
+
+              // Gentle bounds wrapping
+              if (plane.userData.baseX > 70) plane.userData.baseX = -70;
+              if (plane.userData.baseX < -70) plane.userData.baseX = 70;
+              if (plane.userData.baseY > 50) plane.userData.baseY = -10;
+              if (plane.userData.baseY < -10) plane.userData.baseY = 50;
+            });
+
+            /* --- Update Particle Flow Field --- */
+            const positions = glow.geometry.attributes.position.array;
+            const speeds = glow.geometry.attributes.aSpeed.array;
+
+            for (let i = 0; i < positions.length; i += 3) {
+              let px = positions[i];
+              let py = positions[i + 1];
+              let pz = positions[i + 2];
+
+              let dx = bhMesh.position.x - px;
+              let dy = bhMesh.position.y - py;
+              let dz = bhMesh.position.z - pz;
+              let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+              let speed = speeds[i / 3] * (1.0 + scrollP * 4.0); // Extreme acceleration on scroll
+
+              // Pull towards core
+              positions[i] += (dx / dist) * speed;
+              positions[i + 1] += (dy / dist) * speed;
+              positions[i + 2] += (dz / dist) * speed;
+
+              // Tangential Swirl (Orbiting behavior)
+              positions[i] -= (dz / dist) * speed * 2.0;
+              positions[i + 2] += (dx / dist) * speed * 2.0;
+
+              if (dist < 5.0 || dist > 180.0) {
+                let angle = Math.random() * Math.PI * 2;
+                let r = 90 + Math.random() * 60;
+                positions[i] = Math.cos(angle) * r;
+                positions[i + 1] = bhMesh.position.y + (Math.random() - 0.5) * 60;
+                positions[i + 2] = bhMesh.position.z + Math.sin(angle) * r;
+              }
+            }
+            glow.geometry.attributes.position.needsUpdate = true;
+
+            renderer.render(scene, camera);
+          }
+
+          animate();
+        })();
+      </script>
+    </section>
+  </div>
+
+  <!-- Features / Infrastructure Primitives (Section 2) -->
+  <section class="sm:py-32 bg-[#09090b] z-10 border-zinc-900/50 border-t pt-24 pb-24 relative" id="features">
+    <div class="sm:px-6 lg:px-8 max-w-7xl mr-auto ml-auto pr-4 pl-4">
+      <div class="scroll-animate">
+        <h2 class="text-xs font-normal text-indigo-500 tracking-widest uppercase flex items-center gap-2">
+          <span class="w-8 h-px bg-indigo-500/50"></span>
+          Infrastructure Primitives
+        </h2>
+        <p class="sm:text-4xl text-3xl font-normal text-zinc-100 tracking-tight mt-4 drop-shadow-md">The Agents
+        </p>
+        <p class="text-base text-zinc-400 mt-4">
+          Here’s a glimpse at all the agents that Project Montage enables for you:
+        </p>
+      </div>
+
+
+      <div id="grid-container"
+        class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 scroll-animate mt-16 mr-auto ml-auto perspective-1000 gap-x-6 gap-y-6">
+      </div>
+
+      <!-- VERSION INFO -->
+      <div
+        class="fixed bottom-2 right-2 flex gap-1 text-[8px] text-gray-500 pointer-events-none select-none opacity-50">
+        <div>Web: <span id="web-version" class="font-medium">...</span></div>
+        <span class="text-gray-300">|</span>
+        <div>MCP: <span id="mcp-version" class="font-medium">...</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- GRID DATA SCRIPT -->
+  <script src="/static/grid-data.js"></script>
+
+  <!-- FOOTER SCRIPT FOR SCROLL ANIMATIONS -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Render grid items from grid-data.js
+      renderGrid('grid-container');
+
+      // Intersection Observer for scroll-animate elements
+      const observerOptions = {
+        root: null,
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            // Optional: unobserve after showing
+            // observer.unobserve(entry.target);
+          }
+        });
+      }, observerOptions);
+
+      // Targets all elements with scroll-animate or pipeline-step classes
+      const animateElements = document.querySelectorAll('.scroll-animate, .pipeline-step');
+      animateElements.forEach(el => observer.observe(el));
+
+      // Re-run for dynamic elements if necessary
+      window.addEventListener('scroll', () => {
+        // Parallax logic for certain elements could go here
+      });
+    });
+
+    fetch("/versions")
+      .then((res) => res.json())
+      .then((data) => {
+        const webVersion = document.getElementById("web-version");
+        const mcpVersion = document.getElementById("mcp-version");
+        webVersion.textContent = data.web_version || "unknown";
+        mcpVersion.textContent = data.mcp_version || "unknown";
+      })
+      .catch(() => {
+        const webVersion = document.getElementById("web-version");
+        const mcpVersion = document.getElementById("mcp-version");
+        webVersion.textContent = "unknown";
+        mcpVersion.textContent = "unknown";
+      });
+  </script>
+</body>
+
+</html>

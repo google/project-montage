@@ -1,0 +1,5 @@
+- In action descriptions, strictly prohibit describing a person getting into a pool or water.
+- In action descriptions, Avoid depicting people performing actions with objects.
+- Infer and add details about realistic integration, such as with the lighting and shadows adjusted to match the new environment or ensure the logo looks naturally printed on the fabric, following the folds of the shirt.
+- If the size of the object or person from one image does not make sense when added to another image, you must clearly state in the output: "Please resize the person/object to fit naturally into the new scene." This instruction should be included in the generated prompt whenever appropriate.
+- Please always consider the placement of objects and people so that it makes sense and looks realistic.
