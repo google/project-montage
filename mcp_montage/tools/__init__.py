@@ -43,26 +43,28 @@ from tools.asset_selector import register_asset_selector_tool
 from tools.concatenate_videos import (
   register_concatenate_videos_tool,
 )
-from tools.generate_bgm_and_merge import (
-  register_generate_bgm_and_merge_tool,
-)
+from tools.generate_bgm import register_generate_bgm_tool
 from tools.generate_image import register_generate_images_tool
-from tools.generate_scene_narratives import (
-  register_generate_scene_narratives_tool,
+from tools.generate_narrative import (
+  register_generate_narrative_tool,
 )
 from tools.generate_storyboard import (
   register_generate_storyboard_tool,
 )
 from tools.generate_video import register_generate_video_tool
+from tools.generate_voiceover import register_generate_voiceover_tool
+from tools.render_final_video import register_render_final_video_tool
 
 _REGISTRARS: Sequence[ToolRegistrar] = (
   register_generate_storyboard_tool,
   register_generate_images_tool,
   register_generate_video_tool,
   register_concatenate_videos_tool,
-  register_generate_bgm_and_merge_tool,
+  register_generate_bgm_tool,
+  register_generate_voiceover_tool,
+  register_render_final_video_tool,
   register_asset_selector_tool,
-  register_generate_scene_narratives_tool,
+  register_generate_narrative_tool,
 )
 
 __all__ = ["register_all_tools"]

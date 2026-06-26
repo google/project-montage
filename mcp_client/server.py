@@ -74,7 +74,7 @@ def _fetch_mcp_version() -> str:
   url = f"{SERVER_URL}/version"
   headers = _get_auth_headers(url)
   try:
-    response = requests.get(url, headers=headers, timeout=5)
+    response = requests.get(url, headers=headers, timeout=30)
     response.raise_for_status()
   except Exception:
     return "unknown"

@@ -17,10 +17,6 @@ You can make modifications in the specific prompt instead.)"""  # noqa: E501
 
 from typing import Any
 
-from services.agents.config.prompt_loader import (  # noqa: E501
-  image_to_storyboard_constraints_prompt,
-)
-
 end_video_preamble = """\
 ---
 ## How to End the Video
@@ -36,7 +32,7 @@ The final scene of the storyboard must be designed to deliver a clear sense of v
 
 storyboard_writer_instruction: str = f"""\
 ## Role:
-You are the Master Storyboard Architect and Stylist. Your function is to generate a highly detailed, scene-by-scene storyboard based on the user's Concept/Requirements and Target Duration. Each scene represents a short video clip (maximum 8 seconds) that will be generated and stitched together into the final video. Creativity is mandatory, and every scene must adhere to strict duration and style limits.
+You are the Expert Storyboard Architect and Stylist. Your function is to generate a highly detailed, scene-by-scene storyboard based on the user's Concept/Requirements and Target Duration. Each scene represents a short video clip (maximum 8 seconds) that will be generated and stitched together into the final video. Creativity is mandatory, and every scene must adhere to strict duration and style limits.
 
 ---
 ## Input Parameters (Required from User):
@@ -79,13 +75,14 @@ storyboard_writer_config: dict[str, Any] = {
   "model_config": {
     "system_instruction": storyboard_writer_instruction,
     "temperature": 0.5,
+    "response_mime_type": "application/json",
   },
 }
 
 
 image_to_storyboard_writer_instruction = f"""\
 ## Role
-You are the Master Storyboard Architect and Stylist. Your function is to generate a highly detailed, scene-by-scene storyboard based on the user's context, desired duration, and provided images. Each scene represents a short video clip (maximum 8 seconds) that will be generated and stitched together into the final video. Creativity is mandatory, and every scene must adhere to strict duration and style limits.
+You are the Expert Storyboard Architect and Stylist. Your function is to generate a highly detailed, scene-by-scene storyboard based on the user's context, desired duration, and provided images. Each scene represents a short video clip (maximum 8 seconds) that will be generated and stitched together into the final video. Creativity is mandatory, and every scene must adhere to strict duration and style limits.
 
 ---
 ## Input Parameters (Required from User):
@@ -105,7 +102,6 @@ You are the Master Storyboard Architect and Stylist. Your function is to generat
 5. Technical Accuracy: The calculation in how_to_calculate_total_duration must be mathematically correct for every scene, reflecting the running total.
 6. Image Integration: Every scene must creatively incorporate a source_image as background and may optionally include one or more asset_images (characters, decorative elements).
 7. Multiple Images Per Scene: Each scene can reference multiple source images and multiple asset images. Use the image_description from inputs to understand what each image contains and how to compose them together.
-{image_to_storyboard_constraints_prompt}
 
 {end_video_preamble}
 ---
@@ -127,7 +123,7 @@ You must respond using the exact JSON structure below, with no surrounding text,
           "image_description": "<Description of the image referenced from the input or 'None' if no description is provided.>"
         }}
       ],
-      "visual_description": "<A high-fidelity description of the composed scene. Describe how source images and asset images are combined. Focus on camera movement (e.g., slow zoom in, pull out, slight pan) to create a parallax effect. Describe character placement and interaction with the background. The scene must remain frozen in time. The environment in the image shouldn’t do anything beyond what it is capable of. Remember this is a short video clip.>"
+      "visual_description": "<A high-fidelity description of the composed scene. Describe how source images and asset images are combined. Focus on camera movement (e.g., slow zoom in, pull out, slight pan) to create a parallax effect. Describe character placement and interaction with the background. Remember this is a short video clip.>"
     }}
     // ... Continue with subsequent scene objects. The first value in 'how_to_calculate_total_duration' must be the 'total_duration_after_this_scene' from the previous object.
   ]
@@ -141,6 +137,7 @@ image_to_storyboard_writer_config: dict[str, Any] = {
   "model_config": {
     "system_instruction": image_to_storyboard_writer_instruction,
     "temperature": 0.5,
+    "response_mime_type": "application/json",
   },
 }
 

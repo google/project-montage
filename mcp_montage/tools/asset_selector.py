@@ -16,13 +16,70 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from logging import Logger
+from typing import Annotated
 
+from google.genai import types
 from mcp.server.fastmcp import FastMCP
-from schemas.image import ImageMetadata, SelectAssetRequest
+from pydantic import Field
+from schemas import ImageMetadata
 from services.agents.factory import AgentFactory
 from services.agents.text_agent import GeminiAgent
+from shared.constants import GCS_INGREDIENT_IMAGES_FOLDER
+from utils.image import convert_image_to_part
 from utils.storage import list_gcs_images
+
+
+@dataclass
+class SelectAssetRequest:
+  """Request schema for the `select_asset` tool."""
+
+  assets_folder: Annotated[
+    str, Field(description="GCS folder URI containing various asset images")
+  ] = GCS_INGREDIENT_IMAGES_FOLDER
+  images_context: Annotated[
+    list[str],
+    Field(description="List of GCS URIs of user-provided images."),
+  ] = field(default_factory=list)
+  text_requirement: Annotated[
+    str, Field(description="Text describing the requirements.")
+  ] = ""
+  domain_constraints: Annotated[
+    str, Field(description="Optional domain-specific selection constraints.")
+  ] = ""
+
+  def to_contents(self) -> types.ContentUnionDict:
+    """Converts the request object into a formatted string for the LLM."""
+
+    def to_parts(gcs_uri: str) -> list[types.Part]:
+      """Converts the image uri to a formatted string for prompts."""
+      return [
+        types.Part.from_text(
+          text=f"### Image URI: {gcs_uri}, Image Part: "  # noqa: E501
+        ),
+        convert_image_to_part(image=gcs_uri),
+      ]
+
+    prompt_parts: types.ContentUnionDict = [
+      f"**User Context:** {self.text_requirement}",
+    ]
+
+    if self.assets_folder:
+      assets_list = list_gcs_images(self.assets_folder)
+      prompt_parts.append("## **Asset Images:**")
+      for gcs_uri in assets_list:
+        prompt_parts.extend(to_parts(gcs_uri))
+
+    if self.images_context:
+      prompt_parts.append("## **Image Contexts:**")
+      for gcs_uri in self.images_context:
+        prompt_parts.extend(to_parts(gcs_uri))
+
+    if self.domain_constraints:
+      prompt_parts.append(f"**Constraints:** {self.domain_constraints}")
+
+    return prompt_parts
 
 
 def register_asset_selector_tool(

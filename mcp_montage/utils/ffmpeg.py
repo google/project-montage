@@ -110,6 +110,28 @@ class FfmpegRunner:
     )
     return float(result.stdout)
 
+  def has_audio(self, input_path: str) -> bool:
+    """
+    Checks if a video file has an audio stream.
+    """
+    try:
+      result = self._probe(
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "a",
+          "-show_entries",
+          "stream=codec_type",
+          "-of",
+          "csv=p=0",
+          input_path,
+        ]
+      )
+      return "audio" in result.stdout
+    except (subprocess.CalledProcessError, ValueError):
+      return False
+
   def apply_transition(
     self,
     input_path1: str,
@@ -450,3 +472,194 @@ class FfmpegRunner:
       ],
       label="loop-audio-fade",
     )
+
+  def concat_audio_segments(
+    self,
+    audio_segments: list[tuple[str, float, float]],
+    output_path: str,
+  ) -> float:
+    """
+    Concatenates multiple audio segments with silence padding based on timestamps.
+    """  # noqa: E501
+    if not audio_segments:
+      raise ValueError("No audio segments provided")
+
+    # 1. Calculate the final duration based on the latest end time
+    total_duration = max(end_time for _, _, end_time in audio_segments)
+
+    inputs = []
+    filter_chains = []
+    labels = []
+
+    for i, (audio_path, start_time, _) in enumerate(audio_segments):
+      # Add input file
+      inputs.extend(["-i", audio_path])
+
+      # Convert seconds to milliseconds for adelay
+      delay_ms = int(start_time * 1000)
+
+      # Create the delay filter for this specific input
+      # We use [a{i}] as a temporary label for the delayed version
+      filter_chains.append(f"[{i}:a]adelay={delay_ms}:all=1[a{i}]")
+      labels.append(f"[a{i}]")
+
+    # 2. Build the Filter Complex
+    # Join all individual adelay filters
+    adelay_part = ";".join(filter_chains)
+
+    # Mix all delayed segments together
+    # dropout_transition=0 prevents volume dips when segments end
+    input_labels = "".join(labels)
+    amix_part = f"{input_labels}amix=inputs={len(audio_segments)}:dropout_transition=0[mixed]"  # noqa: E501
+
+    # Pad the final result to the total duration
+    apad_part = f"[mixed]apad=whole_dur={total_duration}[aout]"
+
+    # Combine all parts into one string
+    filter_str = f"{adelay_part};{amix_part};{apad_part}"
+
+    # 3. Execute FFmpeg
+    self._run(
+      [
+        *inputs,
+        "-filter_complex",
+        filter_str,
+        "-map",
+        "[aout]",
+        "-t",
+        f"{total_duration:.3f}",
+        "-y",
+        output_path,
+      ],
+      label="concat-audio-segments",
+    )
+
+    return total_duration
+
+  def extract_audio_segment(
+    self,
+    input_path: str,
+    output_path: str,
+    start_time: float,
+    end_time: float,
+  ) -> float:
+    """Extracts an audio slice into a mono 24kHz PCM WAV file.
+
+    Uses decoder-side trimming instead of input seeking so chunk boundaries stay
+    sample-accurate. This avoids tail/head bleed between adjacent narrative
+    chunks when the source audio is re-segmented using word timestamps.
+    """
+    duration = max(0.0, end_time - start_time)
+    if duration <= 0:
+      raise ValueError(
+        f"Invalid audio segment range: start={start_time}, end={end_time}"
+      )
+
+    self._run(
+      [
+        "-i",
+        input_path,
+        "-vn",
+        "-af",
+        (
+          f"atrim=start={start_time:.3f}:end={end_time:.3f},asetpts=PTS-STARTPTS"
+        ),
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        "24000",
+        "-ac",
+        "1",
+        "-y",
+        output_path,
+      ],
+      label="extract-audio-segment",
+    )
+    return duration
+
+  def mix_vo_with_video_audio(
+    self,
+    video_path: str,
+    vo_path: str,
+    output_path: str,
+    vo_volume: float = 1.0,
+    video_audio_volume: float = 1.0,
+    ducking_threshold: float = 0.001,
+    ducking_ratio: float = 1.5,
+    ducking_attack_ms: int = 1000,
+    ducking_release_ms: int = 500,
+    audio_ducking: bool = True,
+  ) -> float:
+    """
+    Mixes voiceover into the video's existing audio.
+    If no audio exists, merges VO into the video.
+    """
+    duration = self.get_video_duration(video_path)
+    has_audio = self.has_audio(video_path)
+
+    if has_audio:
+      filter_complex = (
+        "[0:a]aresample=48000,"
+        "aformat=channel_layouts=stereo,"
+        f"volume={video_audio_volume}[bg];"
+        "[1:a]aresample=48000,"
+        "aformat=channel_layouts=stereo,"
+      )
+      if audio_ducking:
+        filter_complex += (
+          f"volume={vo_volume},"
+          "asplit=2[vo_sc][vo_mix];"
+          f"[bg][vo_sc]sidechaincompress="
+          f"threshold={ducking_threshold}:"
+          f"ratio={ducking_ratio}:"
+          f"attack={ducking_attack_ms}:"
+          f"release={ducking_release_ms}[ducked];"
+          "[ducked][vo_mix]amix=inputs=2:"
+          "duration=first:dropout_transition=2:normalize=0[a]"
+        )
+      else:
+        filter_complex += (
+          f"volume={vo_volume}[vo];"
+          "[bg][vo]amix=inputs=2:"
+          "duration=first:dropout_transition=2:normalize=0[a]"
+        )
+      args = [
+        "-i",
+        video_path,
+        "-i",
+        vo_path,
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "0:v",
+        "-map",
+        "[a]",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-y",
+        output_path,
+      ]
+    else:
+      # Video has no audio, just merge VO
+      args = [
+        "-i",
+        video_path,
+        "-i",
+        vo_path,
+        "-map",
+        "0:v",
+        "-map",
+        "1:a",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-shortest",
+        "-y",
+        output_path,
+      ]
+
+    self._run(args, label="mix-vo-video")
+    return duration

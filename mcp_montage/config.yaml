@@ -32,8 +32,8 @@
 #   - gemini-2.5-flash-lite
 #
 # IMAGE GENERATION & EDITING (Gemini):
+#   - gemini-3.1-flash-image (Recommended for Project Montage)
 #   - gemini-2.5-flash-image
-#   - gemini-3.1-flash-image-preview (Recommended for Project Montage)
 #
 # VIDEO GENERATION (Veo):
 #   - veo-3.1-generate-001 (Recommended - higher quality)
@@ -44,10 +44,10 @@
 # ============================================================================
 
 # Text generation model used for storyboard creation and prompt building
-gemini_model: gemini-3.1-flash-lite
+gemini_model: gemini-3.5-flash
 
 # Image generation and editing model
-gemini_image_model: gemini-2.5-flash-image
+gemini_image_model: gemini-3.1-flash-image
 
 # Video generation model
 veo_model: veo-3.1-generate-001

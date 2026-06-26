@@ -12,38 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Schemas used by MCP servers."""
+"""Schemas used by MCP servers.
 
-from schemas.config import MCPServerConfig
-from schemas.file import FileMetadata
-from schemas.image import (
-  ImageGenerationRequest,
-  ImageMetadata,
-  ResizeImageRequest,
-  SelectAssetRequest,
-)
-from schemas.storyboard import StoryBoardGenerationRequest
+Only shared output/value types live here. Per-tool request schemas live next
+to the tool they belong to under `mcp_montage/tools/` so editing a tool's
+input description doesn't require touching this package.
+"""
+
+from schemas.image import ImageMetadata
+from schemas.storyboard import SceneImage, Storyboard, StoryboardScene
 from schemas.video import (
-  ConcatenateVideosRequest,
-  GenerateBGMAndMergeRequest,
-  GenerateSceneNarrativesRequest,
-  GenerateSceneNarrativesResponse,
-  VideoGenerationRequest,
+  AudioMetadata,
+  Narrative,
+  NarrativeLine,
   VideoMetadata,
 )
+from schemas.voice import VoiceProfile
 
 __all__ = [
-  "MCPServerConfig",
-  "VideoGenerationRequest",
-  "ConcatenateVideosRequest",
-  "GenerateBGMAndMergeRequest",
-  "StoryBoardGenerationRequest",
-  "ImageGenerationRequest",
   "ImageMetadata",
-  "ResizeImageRequest",
-  "SelectAssetRequest",
   "VideoMetadata",
-  "GenerateSceneNarrativesRequest",
-  "GenerateSceneNarrativesResponse",
-  "FileMetadata",
+  "AudioMetadata",
+  "NarrativeLine",
+  "Narrative",
+  "Storyboard",
+  "StoryboardScene",
+  "SceneImage",
+  "VoiceProfile",
 ]

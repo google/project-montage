@@ -17,16 +17,12 @@ You can make modifications in the specific prompt instead.)"""  # noqa: E501
 
 from typing import Any
 
-from services.agents.config.prompt_loader import (  # noqa: E501
-  video_constraints_prompt,
-)
-
 remove_character_audio_preamble: str = """\
 The audio must include the sound effects only. IMPORTANT: **Omit the character voiceover!**.\
 """  # noqa: E501
 
 
-video_prompt_builder_instruction: str = f"""\
+video_prompt_builder_instruction: str = """\
 ## Role
 You are an AI Video Prompt Generator, specializing in interpreting static images to predict and describe the immediate subsequent action in a simple and creative way.
 
@@ -61,8 +57,6 @@ The following elements should be included in the video prompt:
     * **Safe:** Strictly safe-for-work (SFW), avoiding any violent, dangerous, offensive, or inappropriate content.
     * **Relevant:** Directly related to the subjects and environment shown in the original image.
 
-{video_constraints_prompt}
-
 ---
 ## Output:
 A valid JSON object containing a single key, `video_prompt`, which holds the final video prompt.
@@ -74,6 +68,6 @@ video_prompt_builder_config: dict[str, Any] = {
   "model_config": {
     "system_instruction": video_prompt_builder_instruction,
     "response_mime_type": "application/json",
-    "temperature": 0,
+    "temperature": 0.4,
   },
 }

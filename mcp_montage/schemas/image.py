@@ -17,10 +17,8 @@ from typing import Annotated
 
 from google.genai import types
 from pydantic import Field
-from services.agents.factory import AgentFactory
-from shared.constants import GCS_INGREDIENT_IMAGES_FOLDER, VIEW_ENDPOINT
+from shared.constants import VIEW_ENDPOINT
 from utils.image import convert_image_to_part
-from utils.storage import list_gcs_images
 
 
 @dataclass
@@ -62,6 +60,8 @@ class ImageMetadata:
 
   async def _get_image_description(self) -> str:
     """Get image description using LLM agent"""
+    from services.agents.factory import AgentFactory
+
     describing_image_agent = AgentFactory.create_text_agent(
       agent_name="describing_image",
     )
@@ -78,82 +78,3 @@ class ImageMetadata:
       ),
       convert_image_to_part(image=self.gcs_uri),
     ]
-
-
-@dataclass
-class ImageGenerationRequest:
-  visual_description: Annotated[
-    str,
-    Field(
-      description="A text prompt from the user describing the desired image."
-    ),
-  ]
-  reference_images: Annotated[
-    list[ImageMetadata],
-    Field(description="List of reference images gcs uri."),
-  ] = field(default_factory=list)
-  aspect_ratio: Annotated[
-    str,
-    Field(
-      description="Aspect ratio of output image (e.g., '16:9', '9:16', '1:1'). Default to 16:9"  # noqa: E501
-    ),
-  ] = "16:9"
-
-
-@dataclass
-class ResizeImageRequest:
-  """Request schema for resizing an image to a specified aspect ratio."""
-
-  reference_image: Annotated[
-    str,
-    Field(description="GCS URI of the reference image to resize."),
-  ]
-  aspect_ratio: Annotated[
-    str,
-    Field(
-      description="Aspect ratio of output image (e.g., '16:9', '9:16', '1:1'). Default to 16:9"  # noqa: E501
-    ),
-  ] = "16:9"
-
-
-@dataclass
-class SelectAssetRequest:
-  assets_folder: Annotated[
-    str, Field(description="GCS folder URI containing various asset images")
-  ] = GCS_INGREDIENT_IMAGES_FOLDER
-  images_context: Annotated[
-    list[str],
-    Field(description="List of GCS URIs of user-provided images."),
-  ] = field(default_factory=list)
-  text_requirement: Annotated[
-    str, Field(description="Text describing the requirements.")
-  ] = ""
-
-  def to_contents(self) -> types.ContentUnionDict:
-    """Converts the request object into a formatted string for the LLM."""
-
-    def to_parts(gcs_uri: str) -> list[types.Part]:
-      """Converts the image uri to a formatted string for prompts."""
-      return [
-        types.Part.from_text(
-          text=f"### Image URI: {gcs_uri}, Image Part: "  # noqa: E501
-        ),
-        convert_image_to_part(image=gcs_uri),
-      ]
-
-    prompt_parts: types.ContentUnionDict = [
-      f"**User Context:** {self.text_requirement}",
-    ]
-
-    if self.assets_folder:
-      assets_list = list_gcs_images(self.assets_folder)
-      prompt_parts.append("## **Asset Images:**")
-      for gcs_uri in assets_list:
-        prompt_parts.extend(to_parts(gcs_uri))
-
-    if self.images_context:
-      prompt_parts.append("## **Image Contexts:**")
-      for gcs_uri in self.images_context:
-        prompt_parts.extend(to_parts(gcs_uri))
-
-    return prompt_parts

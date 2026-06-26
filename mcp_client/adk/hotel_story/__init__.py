@@ -11,19 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""Configuration dataclasses for MCP servers."""
-
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-
-@dataclass(slots=True)
-class MCPServerConfig:
-  """Configuration for a FastMCP server instance."""
-
-  name: str
-  instructions: str = ""
-  messages_mount: str = "/messages/"
-  http_debug: bool = True

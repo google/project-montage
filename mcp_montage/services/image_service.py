@@ -20,9 +20,6 @@ from google.genai import types
 from schemas import ImageMetadata
 from utils import log
 
-from services.agents.config.prompt_loader import (  # noqa: E501
-  generate_image_constraints_nanobanana_prompt,
-)
 from services.agents.factory import AgentFactory
 from services.agents.image_agent import GeminiImageAgent
 from services.agents.text_agent import GeminiAgent
@@ -34,6 +31,7 @@ async def generate_image_service(
   visual_description: str,
   reference_images: list[dict[str, Any]] | None = None,
   aspect_ratio: str = "16:9",
+  domain_constraints: str = "",
   output_dir: str | None = None,
   output_gcs_uri: str | None = None,
 ) -> ImageMetadata:
@@ -77,6 +75,8 @@ async def generate_image_service(
     f"visual_description: {visual_description}",
     *image_contents,
   ]
+  if domain_constraints:
+    contents.append(f"Constraints: {domain_constraints}")
 
   # Step 2: Call image_prompt_builder text agent
   image_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(
@@ -88,9 +88,8 @@ async def generate_image_service(
 
   logger.info(f"Generated image prompt: {image_prompt}")
 
-  image_prompt = (
-    image_prompt + "\n\n" + generate_image_constraints_nanobanana_prompt
-  )
+  if domain_constraints:
+    image_prompt = image_prompt + "\n\n" + domain_constraints
 
   # Step 3: Call image_generation agent to generate the final image
   image_agent: GeminiImageAgent = AgentFactory.create_image_agent()

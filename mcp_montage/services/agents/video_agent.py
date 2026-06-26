@@ -77,7 +77,7 @@ class VeoAgent(base_agent.BaseAgent):
     video_items = []
     for generated_video in generated_videos:
       if generated_video.video:
-        logger.info(f"Video has been generated: {generated_video.video}")
+        logger.info("Video has been generated")
 
         video_bytes = None
         if generated_video.video.video_bytes:

@@ -14,14 +14,12 @@
 
 """Storage utils for handling image uploads and downloads to Google Cloud Storage."""  # noqa: E501
 
-import io
 import mimetypes
 import os
 import time
 import uuid
 
 from google.cloud import storage
-from PIL import Image
 from schemas.media import RawMediaItem
 from shared.constants import GOOGLE_CLOUD_PROJECT
 
@@ -53,25 +51,6 @@ def list_gcs_images(gcs_folder_uri: str) -> list[str]:
   return uris
 
 
-def upload_image_to_gcs(
-  image: Image.Image,
-  bucket_name: str,
-  output_file_name: str,
-  output_folder: str,
-) -> str:
-  """Uploads a PIL Image to Google Cloud Storage and returns the GCS URI."""
-  image_bytes = io.BytesIO()
-  image.save(image_bytes, format="PNG")
-  image_bytes.seek(0)
-
-  path = f"{output_folder}/{output_file_name}"
-  bucket = storage_client.bucket(bucket_name)
-  blob = bucket.blob(path)
-  blob.upload_from_file(image_bytes, content_type="image/png")
-
-  return f"gs://{bucket_name}/{path}"
-
-
 def download_bytes_from_gcs(gcs_uri: str) -> bytes:
   """Downloads a file from Google Cloud Storage and returns it as bytes."""
   bucket_name, blob_name = _parse_gcs_uri(gcs_uri)
@@ -100,6 +79,16 @@ def upload_file_to_gcs(
   blob = bucket.blob(blob_name)
   blob.upload_from_filename(file_path, content_type=content_type)
   return gcs_uri
+
+
+def delete_blob(gcs_uri: str) -> None:
+  """Deletes a blob from GCS if it exists."""
+  bucket_name, blob_name = _parse_gcs_uri(gcs_uri)
+  bucket = storage_client.bucket(bucket_name)
+  blob = bucket.blob(blob_name)
+  if blob.exists():
+    blob.delete()
+    logger.info(f"Deleted GCS blob {gcs_uri}")
 
 
 def save_media_batch(

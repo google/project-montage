@@ -10,7 +10,7 @@ mcp_montage/
 ├── server.py            # Main MCP server entry point
 ├── schemas/             # Pydantic models and data schemas
 ├── services/            # Core generation services (agents, image, video)
-|── shared/              # Shared configurations and constants
+├── shared/              # Shared configurations and constants
 ├── tools/               # MCP tools exposed to clients
 ├── utils/               # Helper functions and logging
 ├── assets/              # Static assets
@@ -89,12 +89,15 @@ The agent prompts are located in `services/agents/config/`:
 | Tool | Description |
 | --- | --- |
 | `select_asset` | Select the most suitable asset image based on the provided user context using Gemini. |
-| `generate_storyboard` | Generates a video storyboard consisting of multiple scenes based on user context. |
-| `generate_image` | Generates images from text prompts using Gemini |
-| `generate_video` | Generates video clips from images using Veo |
-| `concatenate_videos` | Merges video clips into a single sequence |
-| `generate_bgm_and_merge` | Generates background music and merges with video |
-| `generate_scene_narratives` | Generates a narration script (SRT) for a video scene using Gemini |
+| `generate_storyboard_by_text` / `generate_storyboard_by_image` | Generate a video storyboard consisting of multiple scenes from text or text + reference images. |
+| `generate_images` | Generate/edit images from prompts and reference images using Nano Banana (parallel). |
+| `resize_image` | Crop or extend an image to a target aspect ratio via Nano Banana (parallel). |
+| `generate_videos` | Animate first-frame images into video clips using Veo (parallel). |
+| `concatenate_videos` | Stitch video clips into a single sequence with optional transitions. |
+| `generate_narrative` | Produce raw ASS subtitle content for a video. |
+| `generate_voiceover` | Synthesize a subtitle-aligned voiceover WAV from ASS content. |
+| `generate_bgm` | Generate a background music track scored against a video. |
+| `render_final_video` | Mux optional BGM + voiceover + subtitle burn-in into the final video in one render pass. |
 
 ## GCS Folder Structure
 
@@ -104,7 +107,9 @@ The agent prompts are located in `services/agents/config/`:
 | `generated_images/` | Generated/edited storyboard images |
 | `generated_videos/` | Individual scene video clips |
 | `concatenated_videos/` | Combined video sequences |
-| `videos_with_bgm/` | Final videos with background music |
+| `bgm/` | Generated background music tracks (WAV) |
+| `voiceovers/` | Subtitle-aligned voiceover tracks (WAV) |
+| `final_videos/` | Finished videos with BGM/voiceover/subtitles muxed in |
 
 ## Running Locally
 

@@ -17,13 +17,14 @@
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Callable, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.sse import SseServerTransport
 from mcp.server.transport_security import TransportSecuritySettings
-from schemas import MCPServerConfig
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -31,15 +32,30 @@ from starlette.routing import Mount, Route
 
 from utils import log
 
-__all__ = ["MCPServer"]
+__all__ = ["MCPServer", "MCPServerConfig"]
+
+
+@dataclass(slots=True)
+class MCPServerConfig:
+  """Configuration for a FastMCP server instance."""
+
+  name: str
+  instructions: str = ""
+  messages_mount: str = "/messages/"
+  http_debug: bool = True
 
 
 class MCPServer:
   """Helper that wires FastMCP with Starlette + SSE plumbing."""
 
-  def __init__(self, config: MCPServerConfig) -> None:
+  def __init__(
+    self,
+    config: MCPServerConfig,
+    on_startup: Sequence[Callable[[], object]] | None = None,
+  ) -> None:
     self.config = config
     self.logger = log.get_logger()
+    self._on_startup: list[Callable[[], object]] = list(on_startup or [])
     self.mcp = FastMCP(
       name=config.name,
       instructions=config.instructions,
@@ -64,7 +80,13 @@ class MCPServer:
   @asynccontextmanager
   async def lifespan(self, app: Starlette):
     async with self._http_app.router.lifespan_context(app) as _:
+      self._run_startup_hooks()
       yield
+
+  def _run_startup_hooks(self) -> None:
+    """Run each registered startup hook once, in registration order."""
+    for hook in self._on_startup:
+      hook()
 
   async def handle_sse(self, request: Request) -> Response:
     server = self.mcp._mcp_server

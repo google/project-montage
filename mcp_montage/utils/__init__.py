@@ -14,6 +14,6 @@
 
 """Utility helpers for MCP servers."""
 
-from utils.server import MCPServer
+from utils.server import MCPServer, MCPServerConfig
 
-__all__ = ["MCPServer"]
+__all__ = ["MCPServer", "MCPServerConfig"]

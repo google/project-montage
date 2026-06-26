@@ -40,3 +40,7 @@ LOG_TO_FILE: bool = os.getenv("LOG_TO_FILE", "True").lower() == "true"
 VIEW_ENDPOINT = os.getenv(
   key="VIEW_ENDPOINT", default="https://storage.cloud.google.com/"
 )
+
+# Estimated number of characters per second in spoken English narration,
+# used as a reference for the narrative writer
+MAX_CHARS_PER_SECOND: int = 15

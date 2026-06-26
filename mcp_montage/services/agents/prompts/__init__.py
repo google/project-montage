@@ -14,30 +14,36 @@
 
 """Agentic configs."""
 
-from services.agents.config.core_prompt.asset_selector import (
+from services.agents.prompts.asset_selector import (
   asset_selector_config,
 )
-from services.agents.config.core_prompt.describing_image import (
+from services.agents.prompts.describing_image import (
   describing_image_config,
 )
-from services.agents.config.core_prompt.generative_cropping import (
+from services.agents.prompts.generative_cropping import (
   generative_cropping_config,
 )
-from services.agents.config.core_prompt.image_prompt_builder import (
+from services.agents.prompts.image_prompt_builder import (
   image_prompt_builder_config,
 )
-from services.agents.config.core_prompt.music_prompt_builder import (
+from services.agents.prompts.music_prompt_builder import (
   music_prompt_builder_config,
 )
-from services.agents.config.core_prompt.narrative_writer import (
+from services.agents.prompts.narrative_refiner import (
+  narrative_refiner_config,
+)
+from services.agents.prompts.narrative_writer import (
   narrative_writer_config,
 )
-from services.agents.config.core_prompt.storyboard_writer import (
+from services.agents.prompts.storyboard_writer import (
   image_to_storyboard_writer_config,
   storyboard_writer_config,
 )
-from services.agents.config.core_prompt.video_prompt_builder import (
+from services.agents.prompts.video_prompt_builder import (
   video_prompt_builder_config,
+)
+from services.agents.prompts.voice_profile_picker import (
+  voice_profile_picker_config,
 )
 
 __all__ = [
@@ -50,4 +56,6 @@ __all__ = [
   "describing_image_config",
   "music_prompt_builder_config",
   "narrative_writer_config",
+  "narrative_refiner_config",
+  "voice_profile_picker_config",
 ]

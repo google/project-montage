@@ -14,13 +14,13 @@
 
 """Contains business logic for audio processing and BGM generation."""
 
-import os
-
 from google.genai import types
-from schemas import VideoMetadata
+from schemas import AudioMetadata
+from schemas.media import RawMediaItem
 from utils import log
 from utils.ffmpeg import FfmpegRunner
 from utils.image import convert_image_to_part
+from utils.storage import save_media_batch
 
 from services import lyria_service
 from services.agents.factory import AgentFactory
@@ -32,6 +32,7 @@ async def generate_bgm_music(
   video_gcs_uri: str,
   prompt: str | None = None,
   local_dir: str | None = None,
+  domain_constraints: str = "",
 ) -> str:
   """Generates BGM music using the Lyria API.
 
@@ -39,6 +40,8 @@ async def generate_bgm_music(
       video_gcs_uri: GCS URI of the video to generate BGM for.
       prompt: (Optional) Additional prompt for the music.
       local_dir: (Optional) Local directory to save the generated music.
+      domain_constraints: (Optional) Domain-specific rules appended to the
+          music prompt builder input.
 
   Returns:
       Path to the normalized BGM file.
@@ -55,6 +58,9 @@ async def generate_bgm_music(
 
   if prompt:
     user_prompt_parts.append(prompt)
+
+  if domain_constraints:
+    user_prompt_parts.append(domain_constraints)
 
   response_json = await music_prompt_builder_agent.generate_json_content_async(
     user_prompt_parts,
@@ -127,84 +133,59 @@ def normalize_loudness(
   )
 
 
-async def generate_bgm_and_merge_service(
+async def generate_bgm_service(
   video_gcs_uri: str,
+  bucket_name: str,
   prompt: str | None = None,
-  bucket_name: str | None = None,
-) -> VideoMetadata:
-  """Generates background music and merges it with the video.
+  domain_constraints: str = "",
+) -> AudioMetadata:
+  """Generates background music for a video and uploads it to GCS.
+
+  This is a generation-only step; muxing into a video is the responsibility
+  of `services.video_service.render_final_video_service`.
 
   Args:
-      video_gcs_uri: GCS URI of the video to add audio to.
-      prompt: Optional text prompt for music generation.
-      bucket_name: Optional GCS bucket name for uploading the result.
+      video_gcs_uri: GCS URI of the video used as scoring reference.
+      bucket_name: GCS bucket the resulting BGM track is uploaded to.
+      prompt: Optional text guidance for the music prompt builder.
+      domain_constraints: (Optional) Domain-specific rules appended to the
+          music prompt builder input.
 
   Returns:
-      VideoMetadata: Metadata of the resulting video with BGM.
+      AudioMetadata for the uploaded WAV track in gs://{bucket}/bgm/.
   """
   import tempfile
-  import time
 
-  from schemas import VideoMetadata
-  from schemas.media import RawMediaItem
-  from shared.constants import GCS_BUCKET_NAME
-  from utils.storage import download_blob_to_file, save_media_batch
-
-  from services.video_service import merge_audio as merge_audio_service
-
-  logger.info(f"Adding BGM to video: {video_gcs_uri}")
-
-  if bucket_name is None:
-    bucket_name = GCS_BUCKET_NAME
+  logger.info(f"Generating BGM for video: {video_gcs_uri}")
 
   with tempfile.TemporaryDirectory() as temp_dir:
-    # 1. Download Video
-    local_video_path = os.path.join(temp_dir, "input_video.mp4")
-    logger.info(f"Downloading {video_gcs_uri} to {local_video_path}")
-    download_blob_to_file(video_gcs_uri, local_video_path)
-
-    # 2. Generate BGM
     try:
       local_audio_path = await generate_bgm_music(
         video_gcs_uri=video_gcs_uri,
         prompt=prompt,
         local_dir=temp_dir,
+        domain_constraints=domain_constraints,
       )
       logger.info(f"Generated BGM at {local_audio_path}")
     except Exception as e:
       logger.error(f"Failed to generate bgm: {e}")
       raise ValueError(f"Failed to generate bgm: {e}") from e
 
-    # 3. Merge Audio
-    output_filename = f"video_with_bgm_{int(time.time())}.mp4"
-    local_output_path = os.path.join(temp_dir, output_filename)
+    ffmpeg = FfmpegRunner()
+    duration_seconds = ffmpeg.get_video_duration(local_audio_path)
 
-    try:
-      duration_seconds = merge_audio_service(
-        video_path=local_video_path,
-        audio_path=local_audio_path,
-        output_path=local_output_path,
-      )
-      logger.info(f"Merged video and audio to {local_output_path}")
-    except Exception as e:
-      logger.error(f"Failed to merge audio: {e}")
-      raise ValueError(f"Failed to merge audio: {e}") from e
+    with open(local_audio_path, "rb") as f:
+      audio_bytes = f.read()
 
-    # 4. Upload Result
-    try:
-      with open(local_output_path, "rb") as f:
-        video_bytes = f.read()
+    uploaded_uris = save_media_batch(
+      media_items=[RawMediaItem(data=audio_bytes, mime_type="audio/wav")],
+      output_gcs_uri=f"gs://{bucket_name}/bgm",
+      file_prefix="bgm",
+    )
+    uploaded_uri = uploaded_uris[0]
+    logger.info(f"Uploaded BGM to {uploaded_uri}")
 
-      output_gcs_uri = f"gs://{bucket_name}/videos_with_bgm"
-      uploaded_uris = save_media_batch(
-        media_items=[RawMediaItem(data=video_bytes, mime_type="video/mp4")],
-        output_gcs_uri=output_gcs_uri,
-        file_prefix="video_with_bgm",
-      )
-      uploaded_uri = uploaded_uris[0]
-      logger.info(f"Uploaded video with BGM to {uploaded_uri}")
-    except Exception as e:
-      logger.error(f"Failed to upload video: {e}")
-      raise ValueError(f"Failed to upload video: {e}") from e
-
-  return VideoMetadata(uploaded_uri, duration_seconds=duration_seconds)
+  return AudioMetadata(
+    gcs_uri=uploaded_uri,
+    duration_seconds=duration_seconds,
+  )

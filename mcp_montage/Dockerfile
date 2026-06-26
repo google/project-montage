@@ -36,6 +36,11 @@ COPY . .
 # Install dependencies
 RUN uv sync --frozen
 
+# Pre-download the MMS_FA weights at build time and fast failure if offline.
+# So runtime doesn’t need to fetch ~1.2 GB with TORCH_HOME cache reuse.
+ENV TORCH_HOME=/app/.torch
+RUN uv run python -c "from torchaudio.pipelines import MMS_FA as b; b.get_model(); b.get_tokenizer(); b.get_aligner()"
+
 # Expose the port the app runs on
 EXPOSE 8080
 

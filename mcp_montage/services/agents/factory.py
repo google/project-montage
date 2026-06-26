@@ -17,17 +17,24 @@
 from pathlib import Path
 from typing import Any
 
-from services.agents import image_agent, text_agent, video_agent
-from services.agents.config import (
+from services.agents import (
+  image_agent,
+  native_audio_agent,
+  text_agent,
+  video_agent,
+)
+from services.agents.prompts import (
   asset_selector_config,
   describing_image_config,
   generative_cropping_config,
   image_prompt_builder_config,
   image_to_storyboard_writer_config,
   music_prompt_builder_config,
+  narrative_refiner_config,
   narrative_writer_config,
   storyboard_writer_config,
   video_prompt_builder_config,
+  voice_profile_picker_config,
 )
 
 
@@ -58,6 +65,10 @@ class AgentFactory:
       return text_agent.GeminiAgent(**music_prompt_builder_config)
     elif agent_name == "narrative_writer":
       return text_agent.GeminiAgent(**narrative_writer_config)
+    elif agent_name == "narrative_refiner":
+      return text_agent.GeminiAgent(**narrative_refiner_config)
+    elif agent_name == "voice_profile_picker":
+      return text_agent.GeminiAgent(**voice_profile_picker_config)
     else:
       raise ValueError(f"Unknown agent name: {agent_name}")
 
@@ -88,3 +99,14 @@ class AgentFactory:
       return image_agent.GeminiImageAgent(**generative_cropping_config)
     else:
       raise ValueError(f"Unknown agent name: {agent_name}")
+
+  @classmethod
+  def create_native_audio_agent(
+    cls,
+    custom_config: dict[str, Any] | None = None,
+  ) -> native_audio_agent.NativeAudioAgent:
+    if custom_config is None:
+      raise ValueError(
+        "create_native_audio_agent requires a custom_config dict; the per-script voice profile is built at call time."  # noqa: E501
+      )
+    return native_audio_agent.NativeAudioAgent(**custom_config)

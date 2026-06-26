@@ -12,21 +12,69 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""generate image tool."""
+"""Generate / resize image tools."""
 
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from logging import Logger
+from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
-from schemas import (
-  ImageGenerationRequest,
-  ImageMetadata,
-  ResizeImageRequest,
-)
+from pydantic import Field
+from schemas import ImageMetadata
 from services.agents.factory import AgentFactory
 from services.image_service import generate_image_service
 from utils.image import convert_image_to_part
+
+
+@dataclass
+class ImageGenerationRequest:
+  """Request schema for the `generate_images` tool."""
+
+  visual_description: Annotated[
+    str,
+    Field(
+      description="A text prompt from the user describing the desired image."
+    ),
+  ]
+  reference_images: Annotated[
+    list[ImageMetadata],
+    Field(description="List of reference images gcs uri."),
+  ] = field(default_factory=list)
+  aspect_ratio: Annotated[
+    str,
+    Field(
+      description="Aspect ratio of output image (e.g., '16:9', '9:16', '1:1'). Default to 16:9"  # noqa: E501
+    ),
+  ] = "16:9"
+  domain_constraints: Annotated[
+    str,
+    Field(
+      description="Optional domain-specific constraints appended to all Gemini calls in this tool. Leave empty for general-purpose use."  # noqa: E501
+    ),
+  ] = ""
+
+
+@dataclass
+class ResizeImageRequest:
+  """Request schema for the `resize_image` tool."""
+
+  reference_image: Annotated[
+    str,
+    Field(description="GCS URI of the reference image to resize."),
+  ]
+  aspect_ratio: Annotated[
+    str,
+    Field(
+      description="Aspect ratio of output image (e.g., '16:9', '9:16', '1:1'). Default to 16:9"  # noqa: E501
+    ),
+  ] = "16:9"
+  domain_constraints: Annotated[
+    str,
+    Field(
+      description="Optional domain-specific constraints appended to all Gemini calls in this tool. Leave empty for general-purpose use."  # noqa: E501
+    ),
+  ] = ""
 
 
 def register_generate_images_tool(
@@ -106,6 +154,8 @@ def register_generate_images_tool(
         agent_name="generative_cropping",
       )
       prompt = f"Crop the Image to a new aspect ratio {req.aspect_ratio}, precisely maintaining absolute fidelity to the original content, style, and environmental properties."  # noqa: E501
+      if req.domain_constraints:
+        prompt = prompt + "\n\n" + req.domain_constraints
       image_urls = await generative_cropping_agent.generate_images(
         contents=[prompt, convert_image_to_part(image=req.reference_image)],
         aspect_ratio=req.aspect_ratio,

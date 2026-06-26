@@ -43,7 +43,7 @@ class GeminiAgent(base_agent.BaseAgent):
   def __init__(
     self,
     agent_name: str,
-    model_name: str = config.get("gemini_model", "gemini-3.1-flash-lite"),
+    model_name: str = config.get("gemini_model", "gemini-3.5-flash"),
     model_config: dict[str, Any] | None = None,
     automatic_function_calling: bool = False,
   ):

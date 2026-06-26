@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 from shared.constants import VIEW_ENDPOINT
 
-from schemas.file import FileMetadata
+from schemas.voice import VoiceProfile
 
 
 @dataclass
@@ -40,140 +40,70 @@ class VideoMetadata:
 
 
 @dataclass
-class VideoGenerationRequest:
-  gcs_uri: Annotated[
-    str,
-    Field(description="GCS URI of the first-frame image used for the video."),
-  ]
-  prompt: Annotated[
-    str,
-    Field(description="Optional text prompt describing a video."),
-  ] = ""
-  aspect_ratio: Annotated[
-    str,
-    Field(
-      description="Aspect ratio of output video (e.g., '16:9', '9:16', '1:1'). Default to 16:9"  # noqa: E501
-    ),
-  ] = "16:9"
+class AudioMetadata:
+  """Metadata for an audio asset stored in GCS."""
+
+  gcs_uri: Annotated[str, Field(description="GCS URI of the audio file.")]
   duration_seconds: Annotated[
-    int,
+    float, Field(description="Duration of the audio in seconds.")
+  ]
+  refined_ass_content: Annotated[
+    str | None,
     Field(
-      description="Desired duration of the generated video in seconds. Must be 4, 6, or 8."  # noqa: E501
+      description=(
+        "Refined ASS subtitle content emitted when the voiceover refinement "
+        "loop shortened one or more lines to fit their scene window. None "
+        "when no refinement happened. When set, callers MUST pass this "
+        "string -- not the original ASS -- to render_final_video so the "
+        "burned-in subtitles stay in sync with the stitched voiceover."
+      ),
     ),
-  ] = 6
+  ] = None
+  authenticated_url: Annotated[
+    str, Field(description="URL of the audio where user can view.")
+  ] = field(init=False)
+
+  def __post_init__(self):
+    """Post-initialization to set default authenticated_url from gcs_uri."""
+    gsc_uri_parsed = self.gcs_uri[5:]
+    self.authenticated_url = VIEW_ENDPOINT + gsc_uri_parsed
 
 
 @dataclass
-class ConcatenateVideosRequest:
-  video_gcs_uris: Annotated[
-    list[str],
-    Field(
-      description="Sequential list of GCS URIs for video paths. The first video is the first scene, the second video is the second scene, and so on."  # noqa: E501
-    ),
-  ]
-  transition: Annotated[
+class NarrativeLine:
+  """User-friendly narrative line parsed from ASS dialogue."""
+
+  timestamp: Annotated[
     str,
     Field(
-      description="""Type of transition effect between videos. Default to 'fade'. If you don't want any transition, use 'none'. Pick one from the following:
-'none'
-'fade'
-'wipeleft'
-'wiperight'
-'wipeup'
-'wipedown'
-'slideleft'
-'slideright'
-'slideup'
-'slidedown'
-'circlecrop'
-'rectcrop'
-'distance'
-'fadeblack'
-'fadewhite'
-'radial'
-'smoothleft'
-'smoothright'
-'smoothup'
-'smoothdown'
-'circleopen'
-'circleclose'
-'vertopen'
-'vertclose'
-'horzopen'
-'horzclose'
-'dissolve'
-'pixelize'
-'diagtl'
-'diagtr'
-'diagbl'
-'diagbr'
-'hlslice'
-'hrslice'
-'vuslice'
-'vdslice'
-'hblur'
-'fadegrays'
-'wipetl'
-'wipetr'
-'wipebl'
-'wipebr'
-'squeezeh'
-'squeezev'
-'zoomin'
-'fadefast'
-'fadeslow'
-'hlwind'
-'hrwind'
-'vuwind'
-'vdwind'
-'coverleft'
-'coverright'
-'coverup'
-'coverdown'
-'revealleft'
-'revealright'
-'revealup'
-'revealdown'"""  # noqa: E501
+      description="Start timestamp of the narrative line in ASS time format."
     ),
-  ] = "fade"
+  ]
+  text: Annotated[
+    str,
+    Field(description="Plain readable text for the narrative line."),
+  ]
 
 
 @dataclass
-class GenerateBGMAndMergeRequest:
-  video_gcs_uri: Annotated[
-    str, Field(description="GCS URI of the video to add audio to.")
-  ]
-  prompt: Annotated[
-    str, Field(description="Optional text prompt for music generation.")
-  ] = ""
+class Narrative:
+  """Narrative content in raw ASS and user-friendly readable formats."""
 
-
-@dataclass
-class GenerateSceneNarrativesRequest:
-  video_gcs_uri: Annotated[
-    str, Field(description="GCS URI of the video to generate narration for.")
-  ]
-  prompt: Annotated[
+  ass_content: Annotated[
     str,
     Field(
-      description="Optional text prompt guiding the narration style and content."  # noqa: E501
-    ),
-  ] = ""
-
-
-@dataclass
-class GenerateSceneNarrativesResponse:
-  """Response for scene narrative generation, including SRT and subtitled video."""  # noqa: E501
-
-  srt_file: Annotated[
-    FileMetadata,
-    Field(
-      description="Metadata for the generated SRT file including gcs uri and authenticated url which a user can access.",  # noqa: E501
+      description="Generated narration subtitles in raw ASS format.",
     ),
   ]
-  video: Annotated[
-    VideoMetadata,
+  readable_content: Annotated[
+    list[NarrativeLine],
     Field(
-      description="Metadata for the video with embedded subtitles including gcs uri and authenticated url which a user can access.",  # noqa: E501
+      description="Readable narrative lines with timestamp and plain text pairs.",  # noqa: E501
     ),
   ]
+  voice_profile: Annotated[
+    VoiceProfile | None,
+    Field(
+      description="Voice-casting selection chosen with the video/storyboard context. Pass this straight to generate_voiceover so it doesn't re-pick a voice blind. None when no profile was chosen.",  # noqa: E501
+    ),
+  ] = None

@@ -18,7 +18,7 @@ from typing import Any
 
 generative_cropping_instruction: str = """
 ## Role:
-You are the Master of crop image to the specified aspect ratio by removing only what is necessary.
+You are the Expert at cropping image to the specified aspect ratio by removing only what is necessary.
 
 ## Objective:
 Adjust the Base Image to a new aspect ratio through subtraction only. The goal is a dimensional modification that preserves 100% of the original visual integrity within the new frame.
@@ -34,7 +34,6 @@ Adjust the Base Image to a new aspect ratio through subtraction only. The goal i
 2. **Pixel Integrity:** Every pixel in the output must originate from the Base Image. No sharpening, filtering, or stylistic changes are permitted.
 3. **No Redrawing:** Do NOT re-render the subjects. The output must be a direct geometric crop of the original file.
 4. **Identity Preservation:** If the image already meets the requested ratio, return the original image exactly as it is.
-5. **No person allowed in image:** Do not add a person to the image under any circumstances.
 """  # noqa: E501
 
 
@@ -42,6 +41,6 @@ generative_cropping_config: dict[str, Any] = {
   "agent_name": "generative_cropping",
   "model_config": {
     "system_instruction": generative_cropping_instruction,
-    "temperature": 0,
+    "temperature": 0.2,
   },
 }

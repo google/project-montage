@@ -1,0 +1,176 @@
+{
+  "Zephyr": {
+    "tag": [
+      "bright"
+    ],
+    "gender": "female"
+  },
+  "Puck": {
+    "tag": [
+      "upbeat"
+    ],
+    "gender": "female"
+  },
+  "Charon": {
+    "tag": [
+      "informative"
+    ],
+    "gender": "male"
+  },
+  "Kore": {
+    "tag": [
+      "firm"
+    ],
+    "gender": "female"
+  },
+  "Fenrir": {
+    "tag": [
+      "excitable"
+    ],
+    "gender": "male"
+  },
+  "Leda": {
+    "tag": [
+      "youth"
+    ],
+    "gender": "female"
+  },
+  "Orus": {
+    "tag": [
+      "firm"
+    ],
+    "gender": "male"
+  },
+  "Aoede": {
+    "tag": [
+      "breezy"
+    ],
+    "gender": "female"
+  },
+  "Callirrhoe": {
+    "tag": [
+      "easy-going"
+    ],
+    "gender": "female"
+  },
+  "Autonoe": {
+    "tag": [
+      "bright"
+    ],
+    "gender": "female"
+  },
+  "Enceladus": {
+    "tag": [
+      "breathy"
+    ],
+    "gender": "male"
+  },
+  "Iapetus": {
+    "tag": [
+      "clear"
+    ],
+    "gender": "male"
+  },
+  "Umbriel": {
+    "tag": [
+      "easy-going"
+    ],
+    "gender": "male"
+  },
+  "Algieba": {
+    "tag": [
+      "smooth"
+    ],
+    "gender": "male"
+  },
+  "Despina": {
+    "tag": [
+      "smooth"
+    ],
+    "gender": "female"
+  },
+  "Erinome": {
+    "tag": [
+      "clear"
+    ],
+    "gender": "female"
+  },
+  "Rasalgethi": {
+    "tag": [
+      "informative"
+    ],
+    "gender": "male"
+  },
+  "Laomedeia": {
+    "tag": [
+      "upbeat"
+    ],
+    "gender": "female"
+  },
+  "Achernar": {
+    "tag": [
+      "soft"
+    ],
+    "gender": "female"
+  },
+  "Alnilam": {
+    "tag": [
+      "firm"
+    ],
+    "gender": "male"
+  },
+  "Schedar": {
+    "tag": [
+      "even"
+    ],
+    "gender": "male"
+  },
+  "Gacrux": {
+    "tag": [
+      "mature"
+    ],
+    "gender": "female"
+  },
+  "Pulcherrima": {
+    "tag": [
+      "forward"
+    ],
+    "gender": "female"
+  },
+  "Achird": {
+    "tag": [
+      "friendly"
+    ],
+    "gender": "male"
+  },
+  "Zubenelgenubi": {
+    "tag": [
+      "casual"
+    ],
+    "gender": "male"
+  },
+  "Vindemiatrix": {
+    "tag": [
+      "gentle"
+    ],
+    "gender": "female"
+  },
+  "Sadachbia": {
+    "tag": [
+      "lively"
+    ],
+    "gender": "male"
+  },
+  "Sadaltager": {
+    "tag": [
+      "knowledgeable"
+    ],
+    "gender": "male"
+  },
+  "Sulafat": {
+    "tag": [
+      "warm"
+    ],
+    "gender": "female"
+  }
+}

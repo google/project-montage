@@ -17,9 +17,8 @@ import tempfile
 import time
 
 from google.genai import types
-from schemas import FileMetadata, GenerateSceneNarrativesResponse, VideoMetadata
+from schemas import Narrative, NarrativeLine, VideoMetadata
 from schemas.media import RawMediaItem
-from shared.constants import GCS_BUCKET_NAME
 from utils import log
 from utils.ffmpeg import FfmpegRunner
 from utils.image import convert_image_to_part
@@ -29,15 +28,15 @@ from utils.storage import (
   save_media_batch,
 )
 
-from services.agents.config.prompt_loader import (  # noqa: E501
-  video_constraints_prompt,
-)
 from services.agents.factory import AgentFactory
 from services.agents.text_agent import GeminiAgent
+from services.speech_service import (
+  _clean_ass_dialogue_text,
+  generate_voice_profile,
+)
 
 logger = log.get_logger()
 
-_TRANSITION_DURATION = 1.0
 ffmpeg = FfmpegRunner()
 _OPEN_SANS_DIR = os.path.join(
   os.path.dirname(os.path.dirname(__file__)),
@@ -47,6 +46,8 @@ _OPEN_SANS_DIR = os.path.join(
   "static",
 )
 _OPEN_SANS_FORCE_STYLE = "Fontname=Open Sans"
+
+_TRANSITION_DURATION = 1.0
 
 
 def concatenate_videos_with_transition(
@@ -193,9 +194,11 @@ def merge_audio(
 
 async def generate_video_service(
   gcs_uri: str,
+  output_gcs_uri: str,
   prompt: str | None = None,
   duration_seconds: int = 6,
   aspect_ratio: str = "16:9",
+  domain_constraints: str = "",
   output_dir: str = "tests",
 ) -> VideoMetadata:
   """Generate a video from an image using Veo model."""
@@ -214,14 +217,9 @@ async def generate_video_service(
   if prompt:
     contents.append(f"Text prompt: {prompt}")
 
-  video_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(
-    agent_name="video_prompt_builder"
-  )
-  resp: dict[
-    str, str
-  ] = await video_prompt_builder_agent.generate_json_content_async(
-    contents=contents
-  )
+  if domain_constraints:
+    contents.append(f"Constraints: {domain_constraints}")
+
   video_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(
     agent_name="video_prompt_builder"
   )
@@ -235,7 +233,8 @@ async def generate_video_service(
 
   logger.info(f"Generated video prompt: {video_prompt}")
 
-  video_prompt = video_prompt + "\n\n" + video_constraints_prompt
+  if domain_constraints:
+    video_prompt = video_prompt + "\n\n" + domain_constraints
 
   # Step 2: Veo agent to generate a video from the image
   video_agent = AgentFactory.create_video_agent()
@@ -248,7 +247,7 @@ async def generate_video_service(
     number_of_videos=1,
     duration_seconds=duration_seconds,
     negative_prompt="Speaking, Character's voice",
-    output_gcs_uri=f"gs://{GCS_BUCKET_NAME}/generated_videos",
+    output_gcs_uri=output_gcs_uri,
   )
   uploaded_uri = uploaded_uris[0]
   logger.info(f"Video generation completed. Output saved to {uploaded_uri}")
@@ -256,11 +255,42 @@ async def generate_video_service(
   return VideoMetadata(uploaded_uri, duration_seconds=duration_seconds)
 
 
-async def generate_scene_narratives(
+def _extract_readable_narrative_lines(ass_content: str) -> list[NarrativeLine]:
+  """Extracts readable timestamp/text pairs from ASS dialogue lines."""
+  readable_lines: list[NarrativeLine] = []
+
+  for line in ass_content.splitlines():
+    if not line.startswith("Dialogue:"):
+      continue
+
+    parts = line.split(",", 9)
+    if len(parts) <= 9:
+      continue
+
+    text = _clean_ass_dialogue_text(parts[9].strip())
+    if not text:
+      continue
+
+    readable_lines.append(
+      NarrativeLine(
+        timestamp=parts[1].strip(),
+        text=text,
+      )
+    )
+
+  if not readable_lines:
+    raise ValueError("No dialogue lines found in ASS content.")
+
+  return readable_lines
+
+
+async def generate_narrative(
   video_gcs_uri: str,
   prompt: str | None = None,
-) -> GenerateSceneNarrativesResponse:
-  """Generate a narration script for a video."""
+  storyboard: str | None = None,
+  domain_constraints: str = "",
+) -> Narrative:
+  """Generate a narration script for a video in ASS and readable formats."""
   logger.info(f"Generating narration for video: {video_gcs_uri}")
 
   # Use Gemini to generate ASS content
@@ -273,8 +303,14 @@ async def generate_scene_narratives(
     convert_image_to_part(image=video_gcs_uri, mime_type="video/mp4"),
   ]
 
+  if storyboard:
+    contents.append(f"Storyboard: {storyboard}")
+
   if prompt:
     contents.append(f"Prompt: {prompt}")
+
+  if domain_constraints:
+    contents.append(f"Constraints: {domain_constraints}")
 
   response_text = await agent.generate_content_async(contents)
   ass_content = response_text.strip()
@@ -286,60 +322,128 @@ async def generate_scene_narratives(
     if len(lines) >= 2:
       ass_content = "\n".join(lines[1:-1]).strip()
 
+  readable_content = _extract_readable_narrative_lines(ass_content)
   logger.info("Generated ASS content.")
 
-  with tempfile.TemporaryDirectory() as temp_dir:
-    # Save ASS locally for ffmpeg embedding
-    local_ass_path = os.path.join(temp_dir, "narrative.ass")
-    with open(local_ass_path, "w", encoding="utf-8") as f:
-      f.write(ass_content)
+  # Cast the voice here, where the storyboard and user prompt give richer
+  # context than the bare ASS the voiceover step would otherwise see. The
+  # selection rides along on the Narrative so generate_voiceover can reuse it.
+  voice_context_parts = [part for part in (storyboard, prompt) if part]
+  voice_profile = await generate_voice_profile(
+    ass_content,
+    context="\n\n".join(voice_context_parts) or None,
+  )
+  logger.info(f"Selected voice profile: {voice_profile}")
 
-    # Download video locally
+  return Narrative(
+    ass_content=ass_content,
+    readable_content=readable_content,
+    voice_profile=voice_profile,
+  )
+
+
+async def render_final_video_service(
+  video_gcs_uri: str,
+  bucket_name: str,
+  bgm_gcs_uri: str | None = None,
+  voiceover_gcs_uri: str | None = None,
+  ass_content: str | None = None,
+  audio_ducking: bool = True,
+) -> VideoMetadata:
+  """Render a finished video by muxing optional BGM, voiceover, and subtitles.
+
+  The base video is downloaded once and each requested layer is applied in
+  order on the local file: BGM (looped to length, replaces ambient audio),
+  voiceover (mixed on top of whatever audio is now present), subtitle
+  burn-in. Loudness is normalized at the end and the result is uploaded
+  to gs://{bucket}/final_videos/.
+
+  At least one of `bgm_gcs_uri`, `voiceover_gcs_uri`, or `ass_content` should
+  be provided -- otherwise the function re-encodes the input video without
+  changes.
+
+  Args:
+      video_gcs_uri: GCS URI of the base video.
+      bucket_name: GCS bucket the final video is uploaded to.
+      bgm_gcs_uri: Optional BGM track (from generate_bgm_service).
+      voiceover_gcs_uri: Optional voiceover track
+          (from generate_voiceover_service).
+      ass_content: Optional raw ASS subtitle content to burn in.
+      audio_ducking: Whether to duck existing audio under voiceover.
+
+  Returns:
+      VideoMetadata for the rendered video in gs://{bucket}/final_videos/.
+  """
+  logger.info(
+    f"Composing final video for {video_gcs_uri} (bgm={bool(bgm_gcs_uri)}, vo={bool(voiceover_gcs_uri)}, subs={bool(ass_content)}, ducking={audio_ducking})."  # noqa: E501
+  )
+
+  with tempfile.TemporaryDirectory() as temp_dir:
     local_video_path = os.path.join(temp_dir, "input_video.mp4")
     download_blob_to_file(video_gcs_uri, local_video_path)
 
-    # Embed subtitles using ffmpeg (burn-in)
-    output_filename = f"subtitled_{int(time.time())}.mp4"
-    local_output_path = os.path.join(temp_dir, output_filename)
-    ffmpeg.burn_in_subtitles(
-      input_video_path=local_video_path,
-      subtitle_path=local_ass_path,
-      output_path=local_output_path,
-      fonts_dir=_OPEN_SANS_DIR,
-      force_style=_OPEN_SANS_FORCE_STYLE,
-    )
+    current_path = local_video_path
+    step = 0
 
-    # Upload ASS to GCS
-    ass_uploaded_uris = save_media_batch(
-      media_items=[
-        RawMediaItem(
-          data=ass_content.encode("utf-8"), mime_type="application/x-ass"
-        )
-      ],
-      output_gcs_uri=f"gs://{GCS_BUCKET_NAME}/narratives",
-      file_prefix="narrative",
-    )
-    ass_uploaded_uri = ass_uploaded_uris[0]
+    if bgm_gcs_uri:
+      local_bgm_path = os.path.join(temp_dir, "bgm.wav")
+      download_blob_to_file(bgm_gcs_uri, local_bgm_path)
 
-    # Upload subtitled video to GCS
-    with open(local_output_path, "rb") as f:
+      next_path = os.path.join(temp_dir, f"step{step}_with_bgm.mp4")
+      step += 1
+      merge_audio(
+        video_path=current_path,
+        audio_path=local_bgm_path,
+        output_path=next_path,
+      )
+      current_path = next_path
+
+    if voiceover_gcs_uri:
+      local_vo_path = os.path.join(temp_dir, "voiceover.wav")
+      download_blob_to_file(voiceover_gcs_uri, local_vo_path)
+
+      next_path = os.path.join(temp_dir, f"step{step}_with_vo.mp4")
+      step += 1
+      ffmpeg.mix_vo_with_video_audio(
+        video_path=current_path,
+        vo_path=local_vo_path,
+        output_path=next_path,
+        audio_ducking=audio_ducking,
+      )
+      current_path = next_path
+
+    if ass_content:
+      local_ass_path = os.path.join(temp_dir, "subtitles.ass")
+      with open(local_ass_path, "w", encoding="utf-8") as f:
+        f.write(ass_content)
+
+      next_path = os.path.join(temp_dir, f"step{step}_with_subs.mp4")
+      step += 1
+      ffmpeg.burn_in_subtitles(
+        input_video_path=current_path,
+        subtitle_path=local_ass_path,
+        output_path=next_path,
+        fonts_dir=_OPEN_SANS_DIR,
+        force_style=_OPEN_SANS_FORCE_STYLE,
+      )
+      current_path = next_path
+
+    normalized_path = ffmpeg.normalize_loudness(current_path)
+
+    with open(normalized_path, "rb") as f:
       video_bytes = f.read()
 
-    video_uploaded_uris = save_media_batch(
+    uploaded_uris = save_media_batch(
       media_items=[RawMediaItem(data=video_bytes, mime_type="video/mp4")],
-      output_gcs_uri=f"gs://{GCS_BUCKET_NAME}/videos_with_subtitles",
-      file_prefix="video_with_subtitles",
+      output_gcs_uri=f"gs://{bucket_name}/final_videos",
+      file_prefix="final_video",
     )
-    video_uploaded_uri = video_uploaded_uris[0]
+    uploaded_uri = uploaded_uris[0]
 
-    duration_seconds = ffmpeg.get_video_duration(local_output_path)
+    duration_seconds = ffmpeg.get_video_duration(normalized_path)
 
-  logger.info(f"Narrative generation completed: {ass_uploaded_uri}")
-  logger.info(f"Subtitled video uploaded: {video_uploaded_uri}")
-
-  return GenerateSceneNarrativesResponse(
-    srt_file=FileMetadata(gcs_uri=ass_uploaded_uri),
-    video=VideoMetadata(
-      gcs_uri=video_uploaded_uri, duration_seconds=duration_seconds
-    ),
+  logger.info(f"Final video uploaded: {uploaded_uri}")
+  return VideoMetadata(
+    gcs_uri=uploaded_uri,
+    duration_seconds=duration_seconds,
   )

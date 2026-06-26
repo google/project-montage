@@ -15,17 +15,48 @@
 """Generate video tool."""
 
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from logging import Logger
+from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
-from schemas import (
-  VideoGenerationRequest,
-  VideoMetadata,
-)
+from pydantic import Field
+from schemas import VideoMetadata
 from services.video_service import (
   generate_video_service,
 )
+
+
+@dataclass
+class VideoGenerationRequest:
+  """Request schema for the `generate_videos` tool."""
+
+  gcs_uri: Annotated[
+    str,
+    Field(description="GCS URI of the first-frame image used for the video."),
+  ]
+  prompt: Annotated[
+    str,
+    Field(description="Optional text prompt describing a video."),
+  ] = ""
+  aspect_ratio: Annotated[
+    str,
+    Field(
+      description="Aspect ratio of output video (e.g., '16:9', '9:16', '1:1'). Default to 16:9"  # noqa: E501
+    ),
+  ] = "16:9"
+  duration_seconds: Annotated[
+    int,
+    Field(
+      description="Desired duration of the generated video in seconds. Must be 4, 6, or 8."  # noqa: E501
+    ),
+  ] = 6
+  domain_constraints: Annotated[
+    str,
+    Field(
+      description="Optional domain-specific constraints appended to all Gemini calls in this tool. Leave empty for general-purpose use."  # noqa: E501
+    ),
+  ] = ""
 
 
 def register_generate_video_tool(
@@ -60,7 +91,12 @@ def register_generate_video_tool(
     logger.info(f"Received {len(requests)} video generation requests.")
 
     videos: list[VideoMetadata] = await asyncio.gather(
-      *[generate_video_service(**asdict(req)) for req in requests]
+      *[
+        generate_video_service(
+          **asdict(req), output_gcs_uri=f"gs://{bucket_name}/generated_videos"
+        )
+        for req in requests
+      ]
     )
 
     logger.info(f"Done generating videos: {videos}")

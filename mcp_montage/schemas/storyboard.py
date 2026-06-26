@@ -12,64 +12,131 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass, field
-from typing import Annotated
+"""Storyboard output schemas returned by the storyboard generation tools."""
 
-from google.genai import types
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Annotated, Any
+
 from pydantic import Field
 
-from schemas import ImageMetadata
+
+def _coerce_duration(value: Any) -> int:
+  """Coerces an LLM-provided scene duration into an int (defaults to 0)."""
+  if isinstance(value, bool):
+    return 0
+  if isinstance(value, int):
+    return value
+  try:
+    return int(str(value).strip())
+  except (TypeError, ValueError):
+    return 0
 
 
 @dataclass
-class StoryBoardGenerationRequest:
-  """Request schema for storyboard generation."""
+class SceneImage:
+  """A reference image composited into a storyboard scene."""
 
-  duration_seconds: Annotated[
-    int,
-    Field(
-      description="The total desired time for the final video (seconds). Maximum is 60 seconds. If this value is not explicitly defined by the user, assume a default duration of 6 seconds for each source image or scene."  # noqa: E501
-    ),  # noqa: E501
+  gcs_uri: Annotated[
+    str, Field(description="GCS URI of the source or asset image.")
   ]
-  user_context: Annotated[
+  image_description: Annotated[
     str,
-    Field(
-      description="User-provided information related to the video. This also includes previously generated storyboard for editing.",  # noqa: E501
-    ),
-  ] = "Generate a promotional video."
-  source_images: Annotated[
-    list[ImageMetadata],
-    Field(
-      description="List of user-provided images (scene backgrounds, etc.)."
-    ),
+    Field(description="Description of what the referenced image contains."),
+  ] = ""
+
+
+@dataclass
+class StoryboardScene:
+  """A single scene (short video clip) within a storyboard."""
+
+  scene_id: Annotated[
+    str, Field(description="A unique, creative name for the scene.")
+  ]
+  scene_duration: Annotated[
+    int,
+    Field(description="Duration of the scene in seconds (4, 6, or 8)."),
+  ]
+  visual_description: Annotated[
+    str,
+    Field(description="Detailed description of the scene's visuals."),
+  ]
+  scene_number: Annotated[
+    str,
+    Field(description="Sequential scene number starting at 1."),
+  ] = ""
+  how_to_calculate_total_duration: Annotated[
+    str,
+    Field(description="Running total duration calculation for the scene."),
+  ] = ""
+  base_images: Annotated[
+    list[SceneImage],
+    Field(description="Reference images composited into the scene."),
   ] = field(default_factory=list)
-  asset_images: Annotated[
-    list[ImageMetadata],
-    Field(
-      description="List of character images from Asset Selection (with metadata and descriptions)."  # noqa: E501
-    ),
+
+
+@dataclass
+class Storyboard:
+  """A full storyboard: global style plus an ordered list of scenes."""
+
+  story_mood_and_tone: Annotated[
+    str,
+    Field(description="The visual style, mood, and emotional quality."),
+  ]
+  every_scene_style: Annotated[
+    str,
+    Field(description="The artistic style applied to every generated image."),
+  ]
+  storyboard: Annotated[
+    list[StoryboardScene],
+    Field(description="The ordered list of scenes."),
   ] = field(default_factory=list)
+  scene_number: Annotated[
+    str,
+    Field(description="Top-level scene number emitted by the text variant."),
+  ] = ""
 
-  def __post_init__(self):
-    """Validate and enforce constraints after initialization."""
-    if self.duration_seconds > 60:
-      self.duration_seconds = 60
+  @classmethod
+  def from_dict(cls, data: dict[str, Any]) -> Storyboard:
+    """Builds a Storyboard from the raw JSON dict produced by the LLM.
 
-  def to_contents(self) -> types.ContentUnionDict:
-    """Converts the request object into a formatted string for the LLM."""
-    prompt_parts: types.ContentUnionDict = [
-      f"**User Context:** {self.user_context}",
-      f"**Target Duration:** {self.duration_seconds} seconds",
-    ]
+    Tolerates the two prompt shapes (text vs image variant) and coerces
+    loosely-typed fields (e.g. string durations) into the schema types.
 
-    if self.source_images:
-      prompt_parts.append("## **Source Images:**")
-      for img in self.source_images:
-        prompt_parts.extend(img.to_contents())
+    Args:
+      data: The parsed JSON object returned by the storyboard agent.
 
-    if self.asset_images:
-      prompt_parts.append("## **Assets Images:**")
-      for img in self.asset_images:
-        prompt_parts.extend(img.to_contents())
-
-    return prompt_parts
+    Returns:
+      A populated Storyboard instance.
+    """
+    scenes: list[StoryboardScene] = []
+    for raw in data.get("storyboard", []):
+      if not isinstance(raw, dict):
+        continue
+      base_images = [
+        SceneImage(
+          gcs_uri=str(img.get("gcs_uri", "")),
+          image_description=str(img.get("image_description", "")),
+        )
+        for img in raw.get("base_images", [])
+        if isinstance(img, dict)
+      ]
+      scenes.append(
+        StoryboardScene(
+          scene_id=str(raw.get("scene_id", "")),
+          scene_duration=_coerce_duration(raw.get("scene_duration", 0)),
+          visual_description=str(raw.get("visual_description", "")),
+          scene_number=str(raw.get("scene_number", "")),
+          how_to_calculate_total_duration=str(
+            raw.get("how_to_calculate_total_duration", "")
+          ),
+          base_images=base_images,
+        )
+      )
+    return cls(
+      story_mood_and_tone=str(data.get("story_mood_and_tone", "")),
+      every_scene_style=str(data.get("every_scene_style", "")),
+      storyboard=scenes,
+      scene_number=str(data.get("scene_number", "")),
+    )
