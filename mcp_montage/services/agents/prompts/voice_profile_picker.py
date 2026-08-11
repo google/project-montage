@@ -71,8 +71,8 @@ vs. measured documentary).
 - rapid_fire: fast, energetic, no dead air.
 
 ## Pace selection heuristic (overrides tone-based pace preference):
-The downstream voiceover synthesiser cannot extend a line past its ASS window. Each Dialogue line has a spoken-character budget of roughly {MAX_CHARS_PER_SECOND} characters per second of its (End - Start) window. Before picking a pace, scan the script:
-- If multiple Dialogue lines are dense -- text length close to or above ~80% of their per-line char budget, i.e. roughly {int(MAX_CHARS_PER_SECOND * 0.8)}+ characters per second of window -- pick `rapid_fire` regardless of the script's tone. A natural pace would otherwise overrun the scene windows and force the refinement loop to shorten copy.
+The downstream voiceover synthesiser cannot extend a line past its ASS window. Each Dialogue line has a spoken-character budget of roughly {MAX_CHARS_PER_SECOND} ROMANIZED characters per second of its (End - Start) window. When the additional context includes a "Romanized transcript (for pacing)" section, measure each line's density against its romanized entry; only when no romanized transcript is supplied, fall back to measuring the Dialogue text itself. Before picking a pace, scan the script:
+- If multiple Dialogue lines are dense -- romanized length close to or above ~80% of their per-line char budget, i.e. roughly {int(MAX_CHARS_PER_SECOND * 0.8)}+ romanized characters per second of window -- pick `rapid_fire` regardless of the script's tone. A natural pace would otherwise overrun the scene windows and force the refinement loop to shorten copy.
 - Otherwise, pick the pace that best matches tone and intent (typically `natural`).
 
 # Voice (pick exactly one `voice_name`)

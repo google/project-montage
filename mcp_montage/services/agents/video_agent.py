@@ -21,13 +21,36 @@ from google.genai import types
 from PIL import Image
 from schemas.media import RawMediaItem
 from shared.config import config
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import (
+  retry,
+  retry_if_exception_type,
+  stop_after_attempt,
+  wait_exponential,
+)
 from utils import log
 from utils import storage as storage_utils
 
 from services.agents import base_agent
 
 logger = log.get_logger()
+
+
+class VideoRAIFilteredError(Exception):
+  """Raised when video generation is filtered due to Responsible AI (RAI) / safety policies."""  # noqa: E501
+
+  def __init__(
+    self,
+    message: str,
+    rai_media_filtered_count: int | None = None,
+    rai_media_filtered_reasons: list[str] | None = None,
+    prompt: str | None = None,
+    image_uri: str | None = None,
+  ):
+    super().__init__(message)
+    self.rai_media_filtered_count = rai_media_filtered_count
+    self.rai_media_filtered_reasons = rai_media_filtered_reasons
+    self.prompt = prompt
+    self.image_uri = image_uri
 
 
 class VeoAgent(base_agent.BaseAgent):
@@ -49,33 +72,112 @@ class VeoAgent(base_agent.BaseAgent):
       automatic_function_calling=automatic_function_calling,
     )
 
-  async def save_generated_videos(
+  async def _validate_video_operation(
     self,
     operation: types.GenerateVideosOperation,
-    output_dir: str,
-    output_gcs_uri: str | None = None,
-  ) -> list[str]:
-    """Saves generated videos either locally or to GCS based on parameters."""
-
+    prompt: str | None = None,
+    image_uri: str | None = None,
+  ) -> types.GenerateVideosResponse:
+    """Waits for the video generation operation to complete and validates RAI/safety filters and errors."""  # noqa: E501
     # Waiting for the video(s) to be generated
     while not operation.done:
       await asyncio.sleep(15)
       logger.info("Waiting for the video(s) to be generated...")
       operation = await self.genai_client.aio.operations.get(operation)
 
-    result = operation.result
+    logger.info("operation.done: %s", str(operation.done))
 
-    if not result:
-      logger.error("Error occurred while generating video.")
-      raise Exception("Error occurred while generating video.")
+    rai_media_filtered_count = None
+    rai_media_filtered_reasons = None
 
-    generated_videos = result.generated_videos
+    if operation.response:
+      if (
+        getattr(operation.response, "rai_media_filtered_count", None)
+        is not None
+      ):
+        rai_media_filtered_count = operation.response.rai_media_filtered_count
+      if (
+        getattr(operation.response, "rai_media_filtered_reasons", None)
+        is not None
+      ):
+        rai_media_filtered_reasons = (
+          operation.response.rai_media_filtered_reasons
+        )
+
+    if operation.result:
+      if (
+        getattr(operation.result, "rai_media_filtered_count", None) is not None
+      ):
+        rai_media_filtered_count = operation.result.rai_media_filtered_count
+      if (
+        getattr(operation.result, "rai_media_filtered_reasons", None)
+        is not None
+      ):
+        rai_media_filtered_reasons = operation.result.rai_media_filtered_reasons
+
+    logger.info("rai_media_filtered_count: %s", rai_media_filtered_count)
+    logger.info("rai_media_filtered_reasons: %s", rai_media_filtered_reasons)
+
+    result = operation.result or operation.response
+    op_error = getattr(operation, "error", None)
+
+    if op_error:
+      logger.error("Operation error: %s", str(op_error))
+
+    is_rai_filtered = (
+      rai_media_filtered_count is not None and rai_media_filtered_count > 0
+    ) or bool(rai_media_filtered_reasons)
+
+    generated_videos = result.generated_videos if result else None
+
+    prompt_info = f" for prompt: '{prompt}'" if prompt else ""
+    image_info = f" (image: '{image_uri}')" if image_uri else ""
+
+    if is_rai_filtered and not generated_videos:
+      error_msg = (
+        f"Video generation failed due to Responsible AI (RAI) safety filtering{prompt_info}{image_info}. "  # noqa: E501
+        f"rai_media_filtered_count: {rai_media_filtered_count}, "
+        f"rai_media_filtered_reasons: {rai_media_filtered_reasons}. "
+        f"The prompt or input image was blocked by safety/guideline policies. "
+        f"Consider readjusting the prompt or input image to avoid safety blocks."  # noqa: E501
+      )
+      logger.error(error_msg)
+      raise VideoRAIFilteredError(
+        message=error_msg,
+        rai_media_filtered_count=rai_media_filtered_count,
+        rai_media_filtered_reasons=rai_media_filtered_reasons,
+        prompt=prompt,
+        image_uri=image_uri,
+      )
+
     if not generated_videos:
-      logger.error("No videos were generated.")
-      raise Exception("No videos were generated.")
+      error_msg = (
+        f"No videos were generated{prompt_info}{image_info}. Operation error: {op_error}"  # noqa: E501
+        if op_error
+        else f"No videos were generated{prompt_info}{image_info}."
+      )  # noqa: E501
+      logger.error(error_msg)
+      raise Exception(error_msg)
 
+    if is_rai_filtered:
+      logger.warning(
+        "Some requested videos were filtered by RAI checks (count: %s, reasons: %s), but %d video(s) were successfully generated.",  # noqa: E501
+        rai_media_filtered_count,
+        rai_media_filtered_reasons,
+        len(generated_videos),
+      )
+
+    return result
+
+  async def save_generated_videos(
+    self,
+    result: types.GenerateVideosResponse,
+    output_dir: str,
+    output_gcs_uri: str | None = None,
+  ) -> list[str]:
+    """Saves generated videos either locally or to GCS based on parameters."""
     video_items = []
-    for generated_video in generated_videos:
+    for generated_video in result.generated_videos or []:
       if generated_video.video:
         logger.info("Video has been generated")
 
@@ -102,8 +204,10 @@ class VeoAgent(base_agent.BaseAgent):
     )
 
   @retry(
+    retry=retry_if_exception_type(VideoRAIFilteredError),
     wait=wait_exponential(min=10, max=60, multiplier=2),
     stop=stop_after_attempt(3),
+    reraise=True,
   )
   async def text_to_videos(
     self,
@@ -135,8 +239,13 @@ class VeoAgent(base_agent.BaseAgent):
       ),
     )
 
-    return await self.save_generated_videos(
+    result = await self._validate_video_operation(
       operation,
+      prompt=prompt,
+    )
+
+    return await self.save_generated_videos(
+      result,
       output_dir,
       output_gcs_uri,
     )
@@ -211,8 +320,10 @@ class VeoAgent(base_agent.BaseAgent):
       )
 
   @retry(
+    retry=retry_if_exception_type(VideoRAIFilteredError),
     wait=wait_exponential(min=30, max=60, multiplier=2),
     stop=stop_after_attempt(3),
+    reraise=True,
   )
   async def image_to_videos(
     self,
@@ -227,6 +338,7 @@ class VeoAgent(base_agent.BaseAgent):
     last_frame_bytes: bytes | None = None,
     output_gcs_uri: str | None = None,
     generate_audio: bool = False,
+    image_uri: str | None = None,
   ) -> list[str]:
     logger.info(f"Generating videos using {self.model_name}")
     logger.debug(self._build_request_log(prompt))
@@ -262,8 +374,14 @@ class VeoAgent(base_agent.BaseAgent):
       )
     )
 
-    video_output = await self.save_generated_videos(
+    result = await self._validate_video_operation(
       operation,
+      prompt=prompt,
+      image_uri=image_uri,
+    )
+
+    video_output = await self.save_generated_videos(
+      result,
       output_dir,
       output_gcs_uri,
     )

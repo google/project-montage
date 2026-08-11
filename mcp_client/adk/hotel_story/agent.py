@@ -102,6 +102,7 @@ root_agent = LlmAgent(
         "generate_images",
         "resize_image",
         "generate_videos",
+        "generate_videos_omni",
         "concatenate_videos",
         "generate_bgm",
         "generate_narrative",

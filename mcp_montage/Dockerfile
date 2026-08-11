@@ -18,6 +18,7 @@ FROM python:3.11-slim
 # ffmpeg is required for video processing
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    fontconfig \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,16 +31,28 @@ WORKDIR /app
 # Copy dependency files first to leverage cache
 COPY pyproject.toml uv.lock ./
 
-# Copy application code
-COPY . .
-
-# Install dependencies
-RUN uv sync --frozen
+# Install Python dependencies (cached)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project
 
 # Pre-download the MMS_FA weights at build time and fast failure if offline.
 # So runtime doesn’t need to fetch ~1.2 GB with TORCH_HOME cache reuse.
 ENV TORCH_HOME=/app/.torch
-RUN uv run python -c "from torchaudio.pipelines import MMS_FA as b; b.get_model(); b.get_tokenizer(); b.get_aligner()"
+RUN uv run --no-project python -c "from torchaudio.pipelines import MMS_FA as b; b.get_model(); b.get_tokenizer(); b.get_aligner()"
+
+# Copy application code
+COPY . .
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen
+
+# Register bundled subtitle fonts with system fontconfig. The ffmpeg
+# subtitles filter's fonts_dir only resolves the Fontname the ASS declares;
+# libass's missing-glyph fallback for OTHER scripts routes through
+# fontconfig, which must know about these fonts at the system level.
+RUN mkdir -p /usr/local/share/fonts/montage \
+    && find assets/fonts -type f \( -name "*.ttf" -o -name "*.otf" \) -exec cp {} /usr/local/share/fonts/montage/ \; \
+    && fc-cache -f
 
 # Expose the port the app runs on
 EXPOSE 8080

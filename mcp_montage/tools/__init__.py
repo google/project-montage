@@ -52,6 +52,7 @@ from tools.generate_storyboard import (
   register_generate_storyboard_tool,
 )
 from tools.generate_video import register_generate_video_tool
+from tools.generate_video_omni import register_generate_video_omni_tool
 from tools.generate_voiceover import register_generate_voiceover_tool
 from tools.render_final_video import register_render_final_video_tool
 
@@ -59,6 +60,7 @@ _REGISTRARS: Sequence[ToolRegistrar] = (
   register_generate_storyboard_tool,
   register_generate_images_tool,
   register_generate_video_tool,
+  register_generate_video_omni_tool,
   register_concatenate_videos_tool,
   register_generate_bgm_tool,
   register_generate_voiceover_tool,

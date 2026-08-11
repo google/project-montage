@@ -17,25 +17,29 @@
 from shared.constants import MAX_CHARS_PER_SECOND
 
 narrative_refiner_instruction = f"""
-You refine an existing ASS subtitle narration script when one or more lines turn out to be too long for the voiceover to fit inside their on-screen window.
+You refine an existing ASS subtitle narration script (plus its line-aligned romanization) when one or more lines turn out to be too long for the voiceover to fit inside their on-screen window.
 
-You operate in a multi-turn chat. The first user message gives you the full ASS content. Each subsequent user message reports which Dialogue line indices overran and by how much. Your job each turn is to re-emit the **entire** ASS content with those specific lines shortened so they fit, keeping every other line and every timestamp byte-for-byte identical.
+You operate in a multi-turn chat. The first user message gives you the full narrative as a JSON object:
+{{"ass_content": "<full ASS file>", "romanization": ["<one entry per Dialogue line>", "..."]}}
+(The "romanization" array may be empty; your output must still follow the output rules below.)
+Each subsequent user message reports which Dialogue line indices overran and by how much. Your job each turn is to re-emit the ENTIRE narrative with those specific lines shortened so they fit, keeping every other line and every timestamp byte-for-byte identical.
+
+## Output format
+Return ONLY a JSON object with exactly these two fields -- no prose, no markdown fences:
+{{
+  "ass_content": "<the complete refined ASS file as a single JSON string>",
+  "romanization": ["<romanization of each Dialogue line in your output, in order>"]
+}}
 
 ## Strict Constraints:
-1. Output the full raw ASS content only -- no markdown fences, no commentary, no leading or trailing text.
-2. Preserve the [Script Info], [V4+ Styles], and [Events] headers exactly as they appeared in the input.
-3. Preserve every Dialogue line's Start and End timestamps exactly. Do not retime anything.
-4. Preserve every Dialogue line that was NOT reported as overrunning, byte-for-byte. Do not touch their text.
-5. For each Dialogue line that WAS reported as overrunning, shorten the text so it fits within a spoken-character budget of approximately {MAX_CHARS_PER_SECOND} characters per second of its window (End - Start). Aim to land comfortably under that budget, not exactly at it.
-6. Keep the shortened line semantically faithful to the original: trim filler, contract phrases, drop redundant adjectives -- do not invent new content or change the scene's meaning.
-7. The total number of Dialogue lines MUST equal the input's total number of Dialogue lines. Do not split, merge, add, or remove lines.
-8. Write all numbers as spoken words -- never use digits, symbols, or numeric notation. If the original line already contains a digit, convert it to words in your output.
-   - Integers: "3" → "three", "10" → "ten"
-   - Years: "2025" → "twenty twenty-five"
-   - Ordinals: "1st" → "first", "21st" → "twenty-first"
-   - Decimals: "3.5" → "three point five"
-   - Percentages: "50%" → "fifty percent"
-   - Prices: "$9.99" → "nine ninety-nine", "$200" → "two hundred dollars"
+1. Preserve the [Script Info], [V4+ Styles], and [Events] headers exactly as they appeared in the input, including the Style line's Fontname.
+2. Preserve every Dialogue line's Start and End timestamps exactly. Do not retime anything.
+3. Preserve every Dialogue line that was NOT reported as overrunning, byte-for-byte, and keep its romanization entry unchanged.
+4. For each Dialogue line that WAS reported as overrunning, shorten the text so its ROMANIZED form fits within a spoken-character budget of approximately {MAX_CHARS_PER_SECOND} romanized characters per second of its window (End - Start). Aim to land comfortably under the budget, not exactly at it. Re-derive that line's romanization entry so it matches the shortened text.
+5. Keep the shortened line semantically faithful to the original: trim filler, contract phrases, drop redundant adjectives -- do not invent new content, and keep the narration language and script unchanged.
+6. The total number of Dialogue lines MUST equal the input's total, and "romanization" MUST have exactly one entry per Dialogue line, in order. Do not split, merge, add, or remove lines.
+7. Romanization entries use ONLY lowercase ASCII letters, apostrophes, and spaces ([a-z' ]) -- no digits, punctuation, diacritics, or tone marks.
+8. Write all numbers as spoken words in the narration language -- never digits or symbols. If the original line already contains a digit, convert it to words in your output.
 
 ## Input format you receive on retry turns:
 A compact list like:
@@ -49,5 +53,6 @@ narrative_refiner_config = {
   "model_config": {
     "system_instruction": narrative_refiner_instruction,
     "temperature": 0.2,
+    "response_mime_type": "application/json",
   },
 }

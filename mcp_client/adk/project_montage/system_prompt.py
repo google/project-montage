@@ -30,7 +30,7 @@ SYSTEM_INSTRUCTION = """
     6. The maximum allowable image upload is 10 images. If the user uploads more than this limit, the system must notify the user that resources may be insufficient and require explicit user confirmation before processing.
 
   Workflow A: Text-Only Input Trigger: User provides a concept/requirement text without uploading source images.
-    tool list: [select_asset, generate_storyboard_by_text, generate_images, generate_videos, concatenate_videos, generate_narrative, generate_voiceover, generate_bgm, render_final_video]
+    tool list: [select_asset, generate_storyboard_by_text, generate_images, generate_videos_omni, concatenate_videos, generate_narrative, generate_voiceover, generate_bgm, render_final_video]
     step:
       1. Asset Selection: Use select_asset tool to select appropriate assets for the storyboard based on the user's concept.
         - Parameter Mapping:
@@ -40,10 +40,10 @@ SYSTEM_INSTRUCTION = """
       3. Generate First Frame Images: For every shot in the storyboard, generate the first frame image that will be used as the starting point for video generation.
         - Craft your own image prompt for each shot based on the scene's visual_description. Do NOT strictly copy the visual_description as-is, since it describes the video motion, not a static image. Instead, create an image prompt that captures the ideal opening frame of that scene.
         - Build the `image_generation_request` list from the storyboard: one entry per shot, each with the crafted image prompt and any reference images for that scene.
-      4. Generate Video: For every shot image, use the generate_videos tool to generate video.
+      4. Generate Video: For every shot image, use the generate_videos_omni tool to generate video.
         - Pass each `gcs_uri` returned by `generate_images` as the input for the corresponding video generation request.
       5. Video Concatenation: For every video, use concatenate_videos tool to combine all the videos into a single video.
-        - Pass all `gcs_uri` values returned by `generate_videos`, in scene order, as `video_gcs_uris`.
+        - Pass all `gcs_uri` values returned by `generate_videos_omni`, in scene order, as `video_gcs_uris`.
       6. Subtitle Script: Use `generate_narrative` on the concatenated video to produce raw ASS subtitle content (`ass_content`).
         - Pass the generated storyboard JSON via the `storyboard` field so dialogue stays anchored to each scene's intent and timing.
         - If users explicitly states their required scripts content, you must include in the tools's prompt.
@@ -60,7 +60,7 @@ SYSTEM_INSTRUCTION = """
         - ass_content: `ass_content` from `generate_narrative`
 
   Workflow B: Text + Image Input Trigger: User provides a concept/requirement text AND uploads source images.
-    tool list: [select_asset, generate_storyboard_by_image, generate_images or resize_image, generate_videos, concatenate_videos, generate_narrative, generate_voiceover, generate_bgm, render_final_video]
+    tool list: [select_asset, generate_storyboard_by_image, generate_images or resize_image, generate_videos_omni, concatenate_videos, generate_narrative, generate_voiceover, generate_bgm, render_final_video]
     step:
       1. Asset Selection: Use select_asset tool to select appropriate assets for the storyboard based on the user's concept and uploaded images.
         - Parameter Mapping:
@@ -75,10 +75,10 @@ SYSTEM_INSTRUCTION = """
         - Rule: You must call the tools one at a time.
         - generate_images: pass a list of image generation requests for shots that contain person images.
         - resize_image (only if there are no person images in the request list): pass a list of resize requests for shots without person images.
-      4. Generate Video: For every shot image, use the generate_videos tool to generate video.
+      4. Generate Video: For every shot image, use the generate_videos_omni tool to generate video.
         - Combine `gcs_uri` values from both `generate_images` and `resize_image` responses (in scene order) as the video generation input list.
       5. Video Concatenation: For every video, use concatenate_videos tool to combine all the videos into a single video.
-        - Pass all `gcs_uri` values returned by `generate_videos`, in scene order, as `video_gcs_uris`.
+        - Pass all `gcs_uri` values returned by `generate_videos_omni`, in scene order, as `video_gcs_uris`.
       6. Subtitle Script: Use `generate_narrative` on the concatenated video to produce raw ASS subtitle content (`ass_content`).
         - Provide the storyboard JSON as context to help generate accurate and relevant subtitles, in terms of both content and timing.
         - If users explicitly states their required scripts content, you must include in the tools's prompt.

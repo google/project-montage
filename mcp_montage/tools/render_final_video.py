@@ -94,7 +94,7 @@ def register_render_final_video_tool(
         - authenticated_url: URL where the user can view the final video.
         - duration_seconds: Duration of the final video in seconds.
 
-    Response: The response must explicitly direct the user to the `authenticated_url` to view the resulted video.
+    Response: The response must explicitly direct the user to the `authenticated_url` to view the resulting video.
     """  # noqa: E501
 
     logger.info("Invoking render_final_video tool.")

@@ -41,6 +41,8 @@ VIEW_ENDPOINT = os.getenv(
   key="VIEW_ENDPOINT", default="https://storage.cloud.google.com/"
 )
 
-# Estimated number of characters per second in spoken English narration,
-# used as a reference for the narrative writer
+# Estimated number of spoken characters per second, measured against the
+# ROMANIZED transcript of a narration line (for English the romanization is
+# effectively the text itself). Used as the per-line length budget by the
+# narrative_writer, narrative_refiner, and voice_profile_picker prompts.
 MAX_CHARS_PER_SECOND: int = 15

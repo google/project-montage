@@ -14,6 +14,7 @@
 
 """Speech generation, alignment, and voiceover-stitching helpers."""
 
+import json
 import os
 import re
 import tempfile
@@ -121,9 +122,15 @@ class WordTimestamp:
 
 @dataclass(slots=True)
 class SubtitleChunk:
-  """Dialogue chunk extracted from ASS with timing and word span."""
+  """Dialogue chunk extracted from ASS with timing and word span.
+
+  `text` is the native-script dialogue (sent to TTS and shown to users);
+  `alignment_text` is its ASCII romanization, consumed exclusively by the
+  forced-alignment path. For English-only input the two are identical.
+  """
 
   text: str
+  alignment_text: str
   start_time: float
   end_time: float
   start_word_index: int
@@ -364,33 +371,70 @@ def _tokenize_text(text: str) -> list[str]:
   return re.findall(r"[a-z]+(?:[‘-][a-z]+)*", normalized)
 
 
-def _parse_ass_dialogue_chunks(ass_content: str) -> list[SubtitleChunk]:
-  """Parses ASS dialogue lines into timed subtitle chunks with word spans."""
+def _parse_ass_dialogue_chunks(
+  ass_content: str,
+  romanization: list[str] | None = None,
+) -> list[SubtitleChunk]:
+  """Parses ASS dialogue lines into timed subtitle chunks with word spans.
+
+  When `romanization` is provided it must contain exactly one entry per
+  Dialogue line, in file order; each chunk's `alignment_text` comes from it.
+  When omitted, `alignment_text` falls back to the native dialogue text
+  (English-only behavior, unchanged from before romanization existed).
+
+  Known limitation: a Dialogue line whose `alignment_text` tokenizes to no
+  words (e.g. a blank or punctuation-only romanization entry) is silently
+  dropped from both the TTS narrative and the alignment transcript -- the
+  burned-in subtitle for that line still renders (it comes from the raw
+  `ass_content`, not from these chunks), but no voiceover audio is
+  generated for it. A warning is logged when this happens.
+
+  Raises:
+    ValueError: If `romanization` is provided with the wrong entry count, or
+      no usable dialogue chunks are found.
+  """
+  dialogue_lines = [
+    line for line in ass_content.splitlines() if line.startswith("Dialogue:")
+  ]
+  if romanization is not None and len(romanization) != len(dialogue_lines):
+    raise ValueError(
+      f"romanization must have one entry per Dialogue line: got "
+      f"{len(romanization)} entries for {len(dialogue_lines)} lines."
+    )
+
   chunks: list[SubtitleChunk] = []
   word_index = 0
-
-  lines = ass_content.splitlines()
-  for line in lines:
-    if line.startswith("Dialogue:"):
-      parts = line.split(",", 9)
-      if len(parts) > 9:
-        start_time = _parse_ass_timestamp(parts[1])
-        end_time = _parse_ass_timestamp(parts[2])
-        text = _clean_ass_dialogue_text(parts[9].strip())
-        tokens = _tokenize_text(text)
-        if not text or not tokens:
-          continue
-        start_word_index = word_index
-        word_index += len(tokens)
-        chunks.append(
-          SubtitleChunk(
-            text=text,
-            start_time=start_time,
-            end_time=end_time,
-            start_word_index=start_word_index,
-            end_word_index=word_index,
-          )
+  for line_index, line in enumerate(dialogue_lines):
+    parts = line.split(",", 9)
+    if len(parts) <= 9:
+      continue
+    start_time = _parse_ass_timestamp(parts[1])
+    end_time = _parse_ass_timestamp(parts[2])
+    text = _clean_ass_dialogue_text(parts[9].strip())
+    alignment_text = (
+      romanization[line_index] if romanization is not None else text
+    )
+    tokens = _tokenize_text(alignment_text)
+    if not text or not tokens:
+      if text and not tokens:
+        logger.warning(
+          f"Dropping Dialogue line {line_index}: alignment_text "
+          f"{alignment_text!r} has no tokenizable words. This line will "
+          "have no voiceover audio."
         )
+      continue
+    start_word_index = word_index
+    word_index += len(tokens)
+    chunks.append(
+      SubtitleChunk(
+        text=text,
+        alignment_text=alignment_text,
+        start_time=start_time,
+        end_time=end_time,
+        start_word_index=start_word_index,
+        end_word_index=word_index,
+      )
+    )
 
   if not chunks:
     raise ValueError("No dialogue chunks found in ASS content.")
@@ -438,7 +482,7 @@ def _align_subtitle_chunks_to_words(
 
   cursor = 0
   for chunk in chunks:
-    chunk_tokens = _tokenize_text(chunk.text)
+    chunk_tokens = _tokenize_text(chunk.alignment_text)
     if not chunk_tokens:
       continue
 
@@ -681,16 +725,6 @@ def _format_overrun_report(overruns: list[ChunkOverrun]) -> str:
   )
 
 
-def _strip_markdown_fences(text: str) -> str:
-  """Strips a leading ```lang fence and trailing ``` from an LLM response."""
-  text = text.strip()
-  if text.startswith("```"):
-    lines = text.split("\n")
-    if len(lines) >= 2:
-      text = "\n".join(lines[1:-1]).strip()
-  return text
-
-
 def _assemble_voice_instructions(pick: dict[str, str]) -> str:
   """Renders the voice_instructions string from a curated-list pick.
 
@@ -719,7 +753,7 @@ def _assemble_voice_instructions(pick: dict[str, str]) -> str:
       f"Unknown pace pick: {pace_key!r}. Expected one of {sorted(PACE_OPTIONS)}."  # noqa: E501
     )
 
-  return f"Read the following transcript based on the audio profile and director's note.\n\n# Audio Profile\n{AUDIO_PROFILES[audio_profile_key]}\n\n# Director's note\nStyle: {VOICE_STYLES[voice_style_key]}\nPace: {PACE_OPTIONS[pace_key]}\nAccent: American (Gen).\n\n## Context: Premium voice. Dynamic pacing — starts intrigued, ends punchy. Tone is polished, persuasive, and inviting.\n\n## Transcript:"  # noqa: E501
+  return f"Read the following transcript based on the audio profile and director's note.\n\n# Audio Profile\n{AUDIO_PROFILES[audio_profile_key]}\n\n# Director's note\nStyle: {VOICE_STYLES[voice_style_key]}\nPace: {PACE_OPTIONS[pace_key]}\nAccent: a natural native accent for the narration language.\n\n## Context: Premium voice. High-impact delivery. Starts with a captivating, high-energy hook to immediately spark attention, maintaining a strong, consistent volume. Ends with a sharp, punchy finish that leaves the listener wanting more. Tone is polished, persuasive, and inviting.\n\n## Transcript:"  # noqa: E501
 
 
 def _resolve_voice_name(pick: dict[str, str]) -> str:
@@ -778,6 +812,7 @@ async def _generate_and_align_voiceover(
   *,
   attempt_id: int,
   seed: int,
+  romanization: list[str] | None = None,
 ) -> _VoiceoverAttempt:
   """Generate one full-pass voiceover and align it against the ASS chunks.
 
@@ -785,10 +820,16 @@ async def _generate_and_align_voiceover(
   while the voice persona stays constant), extracts per-chunk WAV segments, and
   records both the `(window_seconds, audio_seconds)` pair the overrun detector
   consumes and the per-word timestamps the drop detector consumes.
+
+  `romanization`, when provided, supplies one ASCII entry per ASS Dialogue
+  line; forced alignment matches against it while TTS synthesis still uses
+  the native-script `ass_content` text.
   """
   voice_agent = voice_agent_builder(seed)
 
-  subtitle_chunks = _parse_ass_dialogue_chunks(ass_content)
+  subtitle_chunks = _parse_ass_dialogue_chunks(
+    ass_content, romanization=romanization
+  )
   narrative_text = _subtitle_chunks_to_text(subtitle_chunks)
   logger.info(
     f"[attempt {attempt_id}] Extracted narrative text for VO: {narrative_text}"
@@ -800,7 +841,9 @@ async def _generate_and_align_voiceover(
   )
   local_vo_path = vo_file_paths[0]
 
-  alignment_transcript = " ".join(chunk.text for chunk in subtitle_chunks)
+  alignment_transcript = " ".join(
+    chunk.alignment_text for chunk in subtitle_chunks
+  )
   word_timestamps = align_audio_with_transcript(
     local_vo_path, alignment_transcript
   )
@@ -844,6 +887,7 @@ async def generate_voiceover_service(
   ass_content: str,
   bucket_name: str,
   voice_profile: VoiceProfile | None = None,
+  romanization: list[str] | None = None,
 ) -> AudioMetadata:
   """Generate a subtitle-aligned voiceover track and upload it to GCS.
 
@@ -869,6 +913,11 @@ async def generate_voiceover_service(
       voice_profile: Optional pre-chosen casting selection (typically from
           `generate_narrative`, which has the video/storyboard context). When
           omitted, a profile is picked here from `ass_content` alone.
+      romanization: Optional romanized transcript, one lowercase-ASCII entry
+          per ASS Dialogue line (from generate_narrative). Required in
+          practice for non-Latin-script narration -- without it, alignment
+          falls back to the native dialogue text, which only works for
+          English/Latin scripts.
 
   Returns:
       AudioMetadata for the uploaded WAV in gs://{bucket}/voiceovers/.
@@ -892,7 +941,6 @@ async def generate_voiceover_service(
                   "voice_name": _resolve_voice_name(pick),
                 }
               },
-              "language_code": "en-US",
             },
             "temperature": 1.0,
             "response_modalities": ["audio"],
@@ -904,6 +952,7 @@ async def generate_voiceover_service(
 
     current_ass = ass_content
     refined_ass: str | None = None
+    current_romanization = romanization
     refiner_agent = None
     base_seed = 42
     file_attempt = 0
@@ -916,6 +965,7 @@ async def generate_voiceover_service(
       temp_dir,
       attempt_id=file_attempt,
       seed=base_seed,
+      romanization=current_romanization,
     )
 
     while True:
@@ -932,6 +982,7 @@ async def generate_voiceover_service(
           temp_dir,
           attempt_id=file_attempt,
           seed=base_seed + file_attempt,
+          romanization=current_romanization,
         )
         continue
 
@@ -947,16 +998,30 @@ async def generate_voiceover_service(
           refiner_agent = AgentFactory.create_text_agent(
             agent_name="narrative_refiner"
           )
+          narrative_json = json.dumps(
+            {
+              "ass_content": current_ass,
+              "romanization": current_romanization or [],
+            },
+            ensure_ascii=False,
+          )
           refiner_message = (
-            f"Original ASS:\n{current_ass}\n\nOverrun report:\n{overrun_report}"
+            f"Original narrative JSON:\n{narrative_json}\n\n"
+            f"Overrun report:\n{overrun_report}"
           )
         else:
           refiner_message = f"Overrun report:\n{overrun_report}"
 
-        refined_response = await refiner_agent.generate_content_async(
+        refined = await refiner_agent.generate_json_content_async(
           contents=refiner_message
         )
-        current_ass = _strip_markdown_fences(refined_response)
+        current_ass = str(refined.get("ass_content", "")).strip()
+        if not current_ass:
+          raise ValueError("narrative_refiner returned empty ass_content.")
+        if current_romanization is not None:
+          current_romanization = [
+            str(entry) for entry in refined.get("romanization", [])
+          ]
         refined_ass = current_ass
 
         attempt = await _generate_and_align_voiceover(
@@ -965,6 +1030,7 @@ async def generate_voiceover_service(
           temp_dir,
           attempt_id=file_attempt,
           seed=base_seed + file_attempt,
+          romanization=current_romanization,
         )
         continue
 

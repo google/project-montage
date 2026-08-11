@@ -125,11 +125,11 @@ def register_concatenate_videos_tool(
 
     Returns:
       A video metadata that contains:
-        - gcs_uri: GCS URI of the resulted video.
-        - authenticated_url: URL of the resulted video where user can view.
-        - duration_seconds: Duration of the resulted video in seconds.
+        - gcs_uri: GCS URI of the resulting video.
+        - authenticated_url: URL of the resulting video where user can view.
+        - duration_seconds: Duration of the resulting video in seconds.
 
-    Response: The response must explicitly direct the user to the `authenticated_url` to view the resulted video.
+    Response: The response must explicitly direct the user to the `authenticated_url` to view the resulting video.
     """  # noqa: E501
 
     logger.info("Invoking concatenate_videos tool.")

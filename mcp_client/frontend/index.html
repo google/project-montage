@@ -823,12 +823,13 @@
             const session = await createSession(userId);
             const bypass = session.bypass === "true";
             const sessionId = session.id;
+            const appName = encodeURIComponent(session.app_name);
             if (!bypass && !sessionId) {
               throw new Error("Session id missing from response");
             }
             const redirectUrl = bypass
-              ? `/dev-ui/?app=project_montage&userId=${encodeURIComponent(userId)}`
-              : `/dev-ui/?app=project_montage&session=${encodeURIComponent(sessionId)}&userId=${encodeURIComponent(userId)}`;
+              ? `/dev-ui/?app=${appName}&userId=${encodeURIComponent(userId)}`
+              : `/dev-ui/?app=${appName}&session=${encodeURIComponent(sessionId)}&userId=${encodeURIComponent(userId)}`;
             window.location.assign(redirectUrl);
           } catch (error) {
             openChatButton.textContent = "Start Session";

@@ -59,6 +59,7 @@ class GeminiAgent(base_agent.BaseAgent):
   @retry(
     wait=wait_exponential(min=5, max=60, multiplier=2),
     stop=stop_after_attempt(5),
+    reraise=True,
   )
   async def generate_content_async(
     self,
@@ -88,6 +89,7 @@ class GeminiAgent(base_agent.BaseAgent):
   @retry(
     wait=wait_exponential(min=5, max=60, multiplier=2),
     stop=stop_after_attempt(5),
+    reraise=True,
   )
   async def generate_json_content_async(
     self,
@@ -129,6 +131,7 @@ class GeminiAgent(base_agent.BaseAgent):
   @retry(
     wait=wait_exponential(min=5, max=60, multiplier=2),
     stop=stop_after_attempt(5),
+    reraise=True,
   )
   async def generate_json_array_content_async(
     self,

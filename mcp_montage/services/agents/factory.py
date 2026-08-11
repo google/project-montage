@@ -20,6 +20,7 @@ from typing import Any
 from services.agents import (
   image_agent,
   native_audio_agent,
+  omni_agent,
   text_agent,
   video_agent,
 )
@@ -32,6 +33,7 @@ from services.agents.prompts import (
   music_prompt_builder_config,
   narrative_refiner_config,
   narrative_writer_config,
+  omni_video_prompt_builder_config,
   storyboard_writer_config,
   video_prompt_builder_config,
   voice_profile_picker_config,
@@ -59,6 +61,8 @@ class AgentFactory:
       return text_agent.GeminiAgent(**asset_selector_config)
     elif agent_name == "video_prompt_builder":
       return text_agent.GeminiAgent(**video_prompt_builder_config)
+    elif agent_name == "omni_video_prompt_builder":
+      return text_agent.GeminiAgent(**omni_video_prompt_builder_config)
     elif agent_name == "describing_image":
       return text_agent.GeminiAgent(**describing_image_config)
     elif agent_name == "music_prompt_builder":
@@ -110,3 +114,16 @@ class AgentFactory:
         "create_native_audio_agent requires a custom_config dict; the per-script voice profile is built at call time."  # noqa: E501
       )
     return native_audio_agent.NativeAudioAgent(**custom_config)
+
+  @classmethod
+  def create_omni_agent(
+    cls,
+    agent_name: str = "gemini_omni",
+    custom_config: dict[str, Any] | None = None,
+  ) -> omni_agent.OmniAgent:
+    if custom_config is not None:
+      return omni_agent.OmniAgent(**custom_config)
+    elif agent_name == "gemini_omni":
+      return omni_agent.OmniAgent()
+    else:
+      raise ValueError(f"Unknown agent name: {agent_name}")

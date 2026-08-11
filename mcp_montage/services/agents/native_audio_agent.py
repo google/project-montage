@@ -88,6 +88,7 @@ class NativeAudioAgent(base_agent.BaseAgent):
   @retry(
     wait=wait_exponential(min=5, max=60, multiplier=2),
     stop=stop_after_attempt(5),
+    reraise=True,
   )
   async def generate_speech(
     self,

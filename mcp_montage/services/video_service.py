@@ -38,14 +38,12 @@ from services.speech_service import (
 logger = log.get_logger()
 
 ffmpeg = FfmpegRunner()
-_OPEN_SANS_DIR = os.path.join(
+_FONTS_DIR = os.path.join(
   os.path.dirname(os.path.dirname(__file__)),
   "assets",
   "fonts",
-  "Open_Sans",
-  "static",
+  "consolidated",
 )
-_OPEN_SANS_FORCE_STYLE = "Fontname=Open Sans"
 
 _TRANSITION_DURATION = 1.0
 
@@ -220,14 +218,8 @@ async def generate_video_service(
   if domain_constraints:
     contents.append(f"Constraints: {domain_constraints}")
 
-  video_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(
-    agent_name="video_prompt_builder"
-  )
-  resp: dict[
-    str, str
-  ] = await video_prompt_builder_agent.generate_json_content_async(
-    contents=contents
-  )
+  video_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(agent_name="video_prompt_builder")
+  resp: dict[str, str] = await video_prompt_builder_agent.generate_json_content_async(contents=contents)
 
   video_prompt: str = str(resp.get("video_prompt", "")).strip()
 
@@ -248,6 +240,7 @@ async def generate_video_service(
     duration_seconds=duration_seconds,
     negative_prompt="Speaking, Character's voice",
     output_gcs_uri=output_gcs_uri,
+    image_uri=gcs_uri,
   )
   uploaded_uri = uploaded_uris[0]
   logger.info(f"Video generation completed. Output saved to {uploaded_uri}")
@@ -284,6 +277,11 @@ def _extract_readable_narrative_lines(ass_content: str) -> list[NarrativeLine]:
   return readable_lines
 
 
+def _count_ass_dialogue_lines(ass_content: str) -> int:
+  """Counts Dialogue lines under [Events] for romanization validation."""
+  return sum(1 for line in ass_content.splitlines() if line.startswith("Dialogue:"))
+
+
 async def generate_narrative(
   video_gcs_uri: str,
   prompt: str | None = None,
@@ -312,32 +310,31 @@ async def generate_narrative(
   if domain_constraints:
     contents.append(f"Constraints: {domain_constraints}")
 
-  response_text = await agent.generate_content_async(contents)
-  ass_content = response_text.strip()
-
-  # Clean up markdown code blocks if present
-  if ass_content.startswith("```"):
-    # Remove first line (```srt or just ```) and last line (```)
-    lines = ass_content.split("\n")
-    if len(lines) >= 2:
-      ass_content = "\n".join(lines[1:-1]).strip()
+  response = await agent.generate_json_content_async(contents)
+  ass_content = str(response.get("ass_content", "")).strip()
+  romanization = [str(entry) for entry in response.get("romanization", [])]
 
   readable_content = _extract_readable_narrative_lines(ass_content)
-  logger.info("Generated ASS content.")
+  dialogue_count = _count_ass_dialogue_lines(ass_content)
+  if len(romanization) != dialogue_count:
+    raise ValueError(f"narrative_writer returned {len(romanization)} romanization entries for {dialogue_count} Dialogue lines; they must match 1:1.")
+  logger.info("Generated ASS content with romanization.")
 
   # Cast the voice here, where the storyboard and user prompt give richer
   # context than the bare ASS the voiceover step would otherwise see. The
-  # selection rides along on the Narrative so generate_voiceover can reuse it.
+  # romanized transcript rides along so the pace heuristic can budget on it.
   voice_context_parts = [part for part in (storyboard, prompt) if part]
+  voice_context_parts.append("Romanized transcript (for pacing):\n" + "\n".join(romanization))
   voice_profile = await generate_voice_profile(
     ass_content,
-    context="\n\n".join(voice_context_parts) or None,
+    context="\n\n".join(voice_context_parts),
   )
   logger.info(f"Selected voice profile: {voice_profile}")
 
   return Narrative(
     ass_content=ass_content,
     readable_content=readable_content,
+    romanization=romanization,
     voice_profile=voice_profile,
   )
 
@@ -423,8 +420,7 @@ async def render_final_video_service(
         input_video_path=current_path,
         subtitle_path=local_ass_path,
         output_path=next_path,
-        fonts_dir=_OPEN_SANS_DIR,
-        force_style=_OPEN_SANS_FORCE_STYLE,
+        fonts_dir=_FONTS_DIR,
       )
       current_path = next_path
 

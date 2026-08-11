@@ -35,6 +35,9 @@ from services.agents.prompts.narrative_refiner import (
 from services.agents.prompts.narrative_writer import (
   narrative_writer_config,
 )
+from services.agents.prompts.omni_prompt_builder import (
+  omni_video_prompt_builder_config,
+)
 from services.agents.prompts.storyboard_writer import (
   image_to_storyboard_writer_config,
   storyboard_writer_config,
@@ -51,6 +54,7 @@ __all__ = [
   "storyboard_writer_config",
   "image_to_storyboard_writer_config",
   "video_prompt_builder_config",
+  "omni_video_prompt_builder_config",
   "generative_cropping_config",
   "asset_selector_config",
   "describing_image_config",

@@ -93,6 +93,7 @@ The agent prompts are located in `services/agents/config/`:
 | `generate_images` | Generate/edit images from prompts and reference images using Nano Banana (parallel). |
 | `resize_image` | Crop or extend an image to a target aspect ratio via Nano Banana (parallel). |
 | `generate_videos` | Animate first-frame images into video clips using Veo (parallel). |
+| `generate_videos_omni` | Animate first-frame images into video clips using Gemini Omni (parallel). |
 | `concatenate_videos` | Stitch video clips into a single sequence with optional transitions. |
 | `generate_narrative` | Produce raw ASS subtitle content for a video. |
 | `generate_voiceover` | Synthesize a subtitle-aligned voiceover WAV from ASS content. |

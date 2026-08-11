@@ -50,6 +50,7 @@ def get_auth_headers(url: str) -> dict[str, str]:
 @retry(
   wait=wait_exponential(min=5, max=60, multiplier=2),
   stop=stop_after_attempt(3),
+  reraise=True,
 )
 async def send_request_to_google_api(
   api_endpoint: str,

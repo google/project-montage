@@ -510,7 +510,7 @@ class FfmpegRunner:
     # Mix all delayed segments together
     # dropout_transition=0 prevents volume dips when segments end
     input_labels = "".join(labels)
-    amix_part = f"{input_labels}amix=inputs={len(audio_segments)}:dropout_transition=0[mixed]"  # noqa: E501
+    amix_part = f"{input_labels}amix=inputs={len(audio_segments)}:dropout_transition=0:normalize=0[mixed]"  # noqa: E501
 
     # Pad the final result to the total duration
     apad_part = f"[mixed]apad=whole_dur={total_duration}[aout]"

@@ -40,6 +40,12 @@ class GenerateVoiceoverRequest:
       description="Optional voice-casting selection. Pass the `voice_profile` returned by `generate_narrative` so the voice fits the video/storyboard context. When omitted, a voice is picked from `ass_content` alone."  # noqa: E501
     ),
   ] = None
+  romanization: Annotated[
+    list[str] | None,
+    Field(
+      description="Optional romanized transcript from `generate_narrative`: one lowercase-ASCII entry per ASS Dialogue line, in order. Pass it whenever it is available -- forced alignment needs it for any non-Latin-script narration; omitting it falls back to aligning on the raw dialogue text, which only works for English."  # noqa: E501
+    ),
+  ] = None
 
 
 def register_generate_voiceover_tool(
@@ -64,6 +70,12 @@ def register_generate_voiceover_tool(
                    `voice_profile` returned by `generate_narrative` so the
                    voice matches the video/storyboard context. Omit it to let
                    this tool pick a voice from `ass_content` alone.
+                 - romanization: Optional romanized transcript from
+                   `generate_narrative`: one lowercase-ASCII entry per ASS
+                   Dialogue line, in order. Pass it whenever it is available
+                   -- forced alignment needs it for any non-Latin-script
+                   narration; omitting it falls back to aligning on the raw
+                   dialogue text, which only works for English.
 
     Returns:
       An AudioMetadata that contains:
@@ -81,4 +93,5 @@ def register_generate_voiceover_tool(
       ass_content=request.ass_content,
       bucket_name=bucket_name,
       voice_profile=request.voice_profile,
+      romanization=request.romanization,
     )

@@ -17,9 +17,9 @@ name = "sign-server"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.124.2",
-    "google-cloud-storage>=3.7.0",
-    "uvicorn[standard]>=0.38.0",
+    "fastapi>=0.139.1",
+    "google-cloud-storage>=3.13.0",
+    "uvicorn[standard]>=0.51.0",
 ]

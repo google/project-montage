@@ -77,6 +77,10 @@ def register_generate_narrative_tool(
       A Narrative object containing:
         - ass_content: Raw ASS subtitle content.
         - readable_content: Timestamp/text pairs parsed from the ASS dialogue.
+        - romanization: Romanized (lowercase ASCII) transcription of each
+          Dialogue line, one entry per line in order. Pass it to
+          `generate_voiceover` so forced alignment works for
+          non-Latin-script languages.
         - voice_profile: Voice-casting selection chosen with the
           video/storyboard context. Pass it to `generate_voiceover`.
     """  # noqa: E501

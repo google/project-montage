@@ -25,18 +25,28 @@ from schemas.voice import VoiceProfile
 class VideoMetadata:
   """Metadata for a video includes its GCS URI and description."""
 
-  gcs_uri: Annotated[str, Field(description="GCS URI of the video.")]
+  gcs_uri: Annotated[str, Field(description="GCS URI of the video.")] = ""
   duration_seconds: Annotated[
     float, Field(description="Duration of the video in seconds.")
-  ]
+  ] = 0.0
+  status: Annotated[
+    str, Field(description="Status of video generation: 'success' or 'error'.")
+  ] = "success"
+  error: Annotated[
+    str | None,
+    Field(description="Error message if video generation failed, else None."),
+  ] = None
   authenticated_url: Annotated[
     str, Field(description="URL of the video where user can view.")
-  ] = field(init=False)
+  ] = field(init=False, default="")
 
   def __post_init__(self):
     """Post-initialization to set default authenticated_url from gcs_uri."""
-    gsc_uri_parsed = self.gcs_uri[5:]
-    self.authenticated_url = VIEW_ENDPOINT + gsc_uri_parsed
+    if self.gcs_uri and self.gcs_uri.startswith("gs://"):
+      gsc_uri_parsed = self.gcs_uri[5:]
+      self.authenticated_url = VIEW_ENDPOINT + gsc_uri_parsed
+    else:
+      self.authenticated_url = ""
 
 
 @dataclass
@@ -99,6 +109,12 @@ class Narrative:
     list[NarrativeLine],
     Field(
       description="Readable narrative lines with timestamp and plain text pairs.",  # noqa: E501
+    ),
+  ]
+  romanization: Annotated[
+    list[str],
+    Field(
+      description="Romanized (lowercase ASCII) transcription of each ASS Dialogue line, one entry per line in order. Pass this to generate_voiceover so forced alignment works for non-Latin-script languages.",  # noqa: E501
     ),
   ]
   voice_profile: Annotated[
