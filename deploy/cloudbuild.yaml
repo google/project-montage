@@ -1,0 +1,57 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Shared Cloud Build configuration for every Project Montage image.
+#
+# Invoked by deploy/deploy.sh, with the service directory as build context:
+#
+#   gcloud builds submit <service_dir> --config deploy/cloudbuild.yaml \
+#     --substitutions _IMAGE=<registry path>,_VERSION=<tag> \
+#     --machine-type <type> --disk-size <GB> --timeout <duration>
+#
+# Machine type, disk size and timeout differ per service (mcp_montage
+# installs the torch stack and pre-downloads ~1.2 GB of alignment weights),
+# so they are passed as flags rather than duplicated per service here.
+#
+# The mcp_montage Dockerfile uses BuildKit cache mounts
+# (RUN --mount=type=cache), which the legacy builder cannot parse, so builds
+# go through buildx. Cloud Build workers are ephemeral, so the layer cache is
+# exported to the registry to survive between builds.
+
+steps:
+  - id: build-and-push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        docker buildx create --use --name builder --driver docker-container
+        docker buildx build \
+          --platform linux/amd64 \
+          --cache-from "type=registry,ref=${_IMAGE}:buildcache" \
+          --cache-to   "type=registry,ref=${_IMAGE}:buildcache,mode=max" \
+          --tag "${_IMAGE}:${_VERSION}" \
+          --tag "${_IMAGE}:latest" \
+          --push \
+          .
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _IMAGE: ""
+  _VERSION: ""
