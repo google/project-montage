@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Omni model video generation services for Project Montage."""
+
 from typing import Literal
 
 from google.genai import types
@@ -24,6 +26,10 @@ from services.agents.text_agent import GeminiAgent
 
 logger = log.get_logger()
 
+_OMNI_VIDEO_TASKS = Literal[
+  "text_to_video", "image_to_video", "reference_to_video", "edit"
+]
+
 
 async def generate_video_omni_service(
   output_gcs_uri: str,
@@ -32,6 +38,7 @@ async def generate_video_omni_service(
   duration_seconds: int = 6,
   aspect_ratio: Literal["16:9", "9:16"] = "16:9",
   domain_constraints: str = "",
+  transition_buffer_seconds: float = 0.0,
   output_dir: str = "tests",
 ) -> VideoMetadata:
   """Generate a video from text prompt and an optional first frame image using Omni model."""  # noqa: E501
@@ -64,7 +71,12 @@ async def generate_video_omni_service(
   if prompt:
     contents.append(f"Text prompt: {prompt}")
 
-  contents.append(f"Expected video duration: {duration_seconds} seconds")
+  # Omni has no duration API parameter -- duration reaches the model only
+  # as a [0-Xs] timecode built from this line, so the transition buffer is
+  # added here. ":g" keeps 7.0 rendering as "7" rather than "7.0", which
+  # the prompt builder turns into a cleaner timecode.
+  gross_duration = duration_seconds + transition_buffer_seconds
+  contents.append(f"Expected video duration: {gross_duration:g} seconds")
 
   if domain_constraints:
     contents.append(f"Constraints: {domain_constraints}")
@@ -87,7 +99,7 @@ async def generate_video_omni_service(
   # Step 2: Omni agent to generate a video from inputs
   omni_agent = AgentFactory.create_omni_agent()
 
-  uploaded_uri = await omni_agent.generate_video(
+  video_metadata: VideoMetadata = await omni_agent.generate_video(
     text=video_prompt,
     image_gcs_uris=[image_gcs_uri] if image_gcs_uri else [],
     aspect_ratio=aspect_ratio,
@@ -95,6 +107,86 @@ async def generate_video_omni_service(
     output_gcs_uri=output_gcs_uri,
   )
 
-  logger.info(f"Video generation completed. Output saved to {uploaded_uri}")
+  logger.info(
+    f"Video generation completed. Output saved to {video_metadata.gcs_uri}"
+  )
 
-  return VideoMetadata(uploaded_uri, duration_seconds=duration_seconds)
+  return video_metadata
+
+
+async def generate_video_with_references_omni_service(
+  image_gcs_uris: list[str],
+  output_gcs_uri: str,
+  prompt: str = "",
+  duration_seconds: int = 6,
+  aspect_ratio: Literal["16:9", "9:16"] = "16:9",
+  domain_constraints: str = "",
+  transition_buffer_seconds: float = 0.0,
+  output_dir: str = "",
+) -> VideoMetadata:
+  """Generate a video guided by reference images using the Omni model."""
+
+  if not prompt and not image_gcs_uris:
+    raise ValueError(
+      "Either prompt or image_gcs_uris must be provided for reference video "
+      "generation."
+    )
+
+  logger.info(
+    "Queueing reference-guided video generation using Omni for: "
+    f"{image_gcs_uris}, prompts: '{prompt}'"
+  )
+
+  # Step 1: Use Gemini to generate a prompt for video generation
+  contents: types.ContentUnionDict = [
+    "Reference images:",
+    *[
+      convert_image_to_part(image=gcs_uri, mime_type="image/png")
+      for gcs_uri in image_gcs_uris
+    ],
+  ]
+
+  if prompt:
+    contents.append(f"Text prompt: {prompt}")
+
+  # Omni has no duration API parameter -- duration reaches the model only
+  # as a [0-Xs] timecode built from this line, so the transition buffer is
+  # added here, mirroring generate_video_omni_service. ":g" keeps 7.0
+  # rendering as "7" rather than "7.0".
+  gross_duration = duration_seconds + transition_buffer_seconds
+  contents.append(f"Expected video duration: {gross_duration:g} seconds")
+
+  if domain_constraints:
+    contents.append(f"Constraints: {domain_constraints}")
+
+  omni_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(
+    agent_name="omni_video_prompt_builder"
+  )
+  resp: dict[
+    str, str
+  ] = await omni_prompt_builder_agent.generate_json_content_async(
+    contents=contents
+  )
+  video_prompt: str = str(resp.get("video_prompt", "")).strip()
+
+  logger.info(f"Generated video prompt: {video_prompt}")
+
+  if domain_constraints:
+    video_prompt = video_prompt + "\n\n" + domain_constraints
+
+  # Step 2: Omni agent to generate a video from inputs
+  omni_agent = AgentFactory.create_omni_agent()
+
+  video_metadata = await omni_agent.generate_video_from_references(
+    text=video_prompt,
+    image_gcs_uris=image_gcs_uris,
+    aspect_ratio=aspect_ratio,
+    output_dir=output_dir,
+    output_gcs_uri=output_gcs_uri,
+  )
+
+  logger.info(
+    f"Video generation completed. Output saved to {video_metadata.gcs_uri}"
+  )
+
+  return video_metadata

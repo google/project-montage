@@ -61,6 +61,20 @@ _MIN_DROPPED_RUN: int = 2
 # dropped. The script is unchanged across these; only the TTS seed varies.
 MAX_VOICEOVER_REGENERATION_RETRIES: int = 3
 
+# Bounds on how far `_align_subtitle_chunks_to_words` will search ahead of a
+# chunk's own expected position for a token match. Without a bound, a single
+# word the TTS dropped (or reworded past what the tolerant matchers above
+# recognize) lets the scan keep advancing token-by-token -- and the partial-
+# match reverse scan keep searching backward from the very end of the whole
+# transcript -- until it finds *some* coincidental match, however far away.
+# That lets one chunk's segment swallow audio belonging to a later scene,
+# and strands the scenes in between with no reachable tokens of their own.
+# The window is sized relative to the chunk's own token count so normal
+# insertions/skips are still tolerated; it just stops the search before it
+# can wander into a different scene's dialogue.
+_ALIGNMENT_SEARCH_WINDOW_MULTIPLE: int = 4
+_ALIGNMENT_SEARCH_MIN_WINDOW: int = 10
+
 # Lazy load forced-alignment model to avoid delay on startup.
 _device = None
 _model = None
@@ -443,8 +457,18 @@ def _parse_ass_dialogue_chunks(
 
 
 def _subtitle_chunks_to_text(chunks: list[SubtitleChunk]) -> str:
-  """Flattens subtitle chunks back into one narration script."""
-  return "\n[pause]\n".join(chunk.text for chunk in chunks)
+  """Flattens subtitle chunks back into one narration script.
+
+  Chunks are separated by a blank line so the TTS reads each as its own
+  beat with a natural breath between them, and a trailing ellipsis follows
+  the final chunk so the model has somewhere to trail off into instead of
+  clipping the last word at the generation's stop condition. Both are pure
+  punctuation/whitespace, not words -- unlike the "[pause]" marker
+  previously used here, which is not a documented Gemini TTS audio tag
+  (unlike genuine tags such as [whispers] or [sighs]) and could get
+  literally vocalized as garbled text, especially in non-English narration.
+  """
+  return "\n\n".join(chunk.text for chunk in chunks) + "\n\n..."
 
 
 def _align_subtitle_chunks_to_words(
@@ -491,9 +515,16 @@ def _align_subtitle_chunks_to_words(
     matched_indices: list[int] = []
     matched_token_count = 0
 
-    while scan_cursor < len(transcript_tokens) and target_index < len(
-      chunk_tokens
-    ):
+    search_limit = min(
+      len(transcript_tokens),
+      cursor
+      + max(
+        len(chunk_tokens) * _ALIGNMENT_SEARCH_WINDOW_MULTIPLE,
+        _ALIGNMENT_SEARCH_MIN_WINDOW,
+      ),
+    )
+
+    while scan_cursor < search_limit and target_index < len(chunk_tokens):
       if _tokens_match(
         chunk_tokens[target_index], transcript_tokens[scan_cursor]
       ):
@@ -600,7 +631,7 @@ def _align_subtitle_chunks_to_words(
     end_index = matched_indices[-1]
 
     if target_index != len(chunk_tokens):
-      reverse_cursor = len(transcript_tokens) - 1
+      reverse_cursor = min(len(transcript_tokens) - 1, search_limit - 1)
       reverse_target_index = len(chunk_tokens) - 1
       reverse_matches: list[int] = []
 
@@ -753,7 +784,7 @@ def _assemble_voice_instructions(pick: dict[str, str]) -> str:
       f"Unknown pace pick: {pace_key!r}. Expected one of {sorted(PACE_OPTIONS)}."  # noqa: E501
     )
 
-  return f"Read the following transcript based on the audio profile and director's note.\n\n# Audio Profile\n{AUDIO_PROFILES[audio_profile_key]}\n\n# Director's note\nStyle: {VOICE_STYLES[voice_style_key]}\nPace: {PACE_OPTIONS[pace_key]}\nAccent: a natural native accent for the narration language.\n\n## Context: Premium voice. High-impact delivery. Starts with a captivating, high-energy hook to immediately spark attention, maintaining a strong, consistent volume. Ends with a sharp, punchy finish that leaves the listener wanting more. Tone is polished, persuasive, and inviting.\n\n## Transcript:"  # noqa: E501
+  return f"Read the following transcript based on the audio profile and director's note.\n\n# Audio Profile\n{AUDIO_PROFILES[audio_profile_key]}\n\n# Director's note\nStyle: {VOICE_STYLES[voice_style_key]}\nPace: {PACE_OPTIONS[pace_key]}\nAccent: a natural native accent for the narration language.\n\n## Context: Premium voice. High-impact delivery. Starts with a captivating, high-energy hook to immediately spark attention, maintaining a strong, consistent volume. Ends with a sharp, punchy finish that leaves the listener wanting more. Tone is polished, persuasive, and inviting.\n\n## Delivery rules: A blank line between lines marks a natural breath -- take it, don't rush into the next line. A trailing \"...\" is you trailing off into silence, not a word to pronounce. Fully articulate every word, including the very last word of the transcript: let its final consonant or vowel finish naturally before the recording ends, never clipped or cut short.\n\n## Transcript:"  # noqa: E501
 
 
 def _resolve_voice_name(pick: dict[str, str]) -> str:

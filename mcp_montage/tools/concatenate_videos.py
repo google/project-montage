@@ -14,7 +14,7 @@
 
 """Concatenate videos tool."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from logging import Logger
 from typing import Annotated
 
@@ -104,6 +104,18 @@ class ConcatenateVideosRequest:
 'revealdown'"""  # noqa: E501
     ),
   ] = "fade"
+  scene_durations: Annotated[
+    list[float],
+    Field(
+      description="Net storyboard duration of each scene in seconds, in the same order as video_gcs_uris. Required whenever transition_buffer_seconds is non-zero."  # noqa: E501
+    ),
+  ] = field(default_factory=list)
+  transition_buffer_seconds: Annotated[
+    float,
+    Field(
+      description="Seconds of extra footage each clip was generated with for the transition to consume. Pass the storyboard's transition_buffer_seconds. Leave at 0.0 for clips generated without a buffer (e.g. by generate_videos), which supports only 'fade' and 'none'."  # noqa: E501
+    ),
+  ] = 0.0
 
 
 def register_concatenate_videos_tool(
@@ -122,6 +134,8 @@ def register_concatenate_videos_tool(
         request: A ConcatenateVideosRequest object containing:
                  - video_gcs_uris: Sequential list of GCS URIs for video paths. The first video is the first scene, the second video is the second scene, and so on.
                  - transition: Type of transition effect between videos. Default to 'fade'.
+                 - scene_durations: Net storyboard duration of each scene, in the same order as video_gcs_uris. Required when transition_buffer_seconds is non-zero.
+                 - transition_buffer_seconds: The storyboard's transition_buffer_seconds. Clips generated without a buffer must leave this at 0.0 and use only 'fade' or 'none'.
 
     Returns:
       A video metadata that contains:
@@ -138,6 +152,14 @@ def register_concatenate_videos_tool(
     )
 
     if request.transition == "none":
+      if request.transition_buffer_seconds > 0:
+        logger.warning(
+          f"transition='none' with a "
+          f"{request.transition_buffer_seconds}s buffer: no transition "
+          f"consumes the buffers, so the result runs roughly "
+          f"{len(request.video_gcs_uris) * request.transition_buffer_seconds}s "  # noqa: E501
+          f"longer than the storyboard total. Nothing compensates for this."
+        )
       video: VideoMetadata = concatenate_videos_wo_transition(
         video_gcs_uris=request.video_gcs_uris,
         output_gcs_uri=f"gs://{bucket_name}/concatenated_videos",

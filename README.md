@@ -18,6 +18,7 @@ Video production with multiple AI models often involves complex orchestration an
 
 Project Montage is designed with a highly modular multi-agent framework. While you can modify the code to integrate other third-party services, the project is optimized for Google Cloud Platform (GCP) out-of-the-box, leveraging powerful models like Gemini and Veo for the smooth experience.
 We highly recommend setting up GCP to get your first video running smoothly.
+For detailed GCP setup and onboarding instructions, see the [Project Montage Onboarding guide](ONBOARDING.md).
 
 ### 1. Set up your Google Cloud Project
 

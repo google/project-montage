@@ -30,20 +30,28 @@ SYSTEM_INSTRUCTION = """
     6. The maximum allowable image upload is 10 images. If the user uploads more than this limit, the system must notify the user that resources may be insufficient and require explicit user confirmation before processing.
 
   Workflow A: Text-Only Input Trigger: User provides a concept/requirement text without uploading source images.
-    tool list: [select_asset, generate_storyboard_by_text, generate_images, generate_videos_omni, concatenate_videos, generate_narrative, generate_voiceover, generate_bgm, render_final_video]
+    tool list: [select_asset, generate_storyboard_by_text, generate_images, generate_videos_with_references_omni, concatenate_videos, generate_narrative, generate_voiceover, generate_bgm, render_final_video]
     step:
       1. Asset Selection: Use select_asset tool to select appropriate assets for the storyboard based on the user's concept.
         - Parameter Mapping:
          - assets_folder = {{ingredient_images_folder}}
       2. Draft Storyboard: Call generate_storyboard_by_text using the user's concept and target duration to create a shot-by-shot script.
         - Pass the GCS URIs returned by `select_asset` as `asset_images`.
-      3. Generate First Frame Images: For every shot in the storyboard, generate the first frame image that will be used as the starting point for video generation.
-        - Craft your own image prompt for each shot based on the scene's visual_description. Do NOT strictly copy the visual_description as-is, since it describes the video motion, not a static image. Instead, create an image prompt that captures the ideal opening frame of that scene.
-        - Build the `image_generation_request` list from the storyboard: one entry per shot, each with the crafted image prompt and any reference images for that scene.
-      4. Generate Video: For every shot image, use the generate_videos_omni tool to generate video.
-        - Pass each `gcs_uri` returned by `generate_images` as the input for the corresponding video generation request.
+      3. Generate Reference Images: Analyze the storyboard to identify how many distinct characters and distinct scene backgrounds will appear in the video. Generate reference images (character asset sheets and scene background images) to guide video generation instead of generating one entry per shot of the storyboard scene.
+        - Identify all distinct characters and distinct scene backgrounds/locations required across the storyboard scenes.
+        - Craft dedicated image prompts to generate:
+          - Character reference images (e.g., character asset sheets or turnaround designs that define the character's appearance and style consistent with `every_scene_style` and `story_mood_and_tone`).
+          - Scene background images (environment/setting reference images representing each distinct location/background in the video).
+        - Build the `image_generation_request` list with one entry per distinct character and distinct scene background, then call `generate_images`.
+      4. Generate Video: For every shot in the storyboard, use the `generate_videos_with_references_omni` tool to generate video guided by the relevant reference images.
+        - For each shot, select and pass the relevant character and/or scene background reference image GCS URIs (1 to 6 reference images) as `image_gcs_uris`.
+        - Craft the video prompt describing the scene action and camera movement based on the shot's visual_description.
+        - Set `transition_buffer_seconds` on EACH request: the storyboard's `transition_buffer_seconds` for every scene EXCEPT the final scene, which must be 0.0 because no transition follows it. Set it per request; never infer it from the position in the list, since a retry may send one scene alone.
       5. Video Concatenation: For every video, use concatenate_videos tool to combine all the videos into a single video.
-        - Pass all `gcs_uri` values returned by `generate_videos_omni`, in scene order, as `video_gcs_uris`.
+        - Pass all `gcs_uri` values returned by `generate_videos_with_references_omni`, in scene order, as `video_gcs_uris`.
+        - Pass the storyboard's `transition` as `transition`.
+        - Pass the storyboard's `transition_buffer_seconds` as `transition_buffer_seconds`.
+        - Pass each scene's `scene_duration` from the storyboard, in scene order, as `scene_durations`. It must have exactly one entry per video.
       6. Subtitle Script: Use `generate_narrative` on the concatenated video to produce raw ASS subtitle content (`ass_content`).
         - Pass the generated storyboard JSON via the `storyboard` field so dialogue stays anchored to each scene's intent and timing.
         - If users explicitly states their required scripts content, you must include in the tools's prompt.
@@ -77,10 +85,44 @@ SYSTEM_INSTRUCTION = """
         - resize_image (only if there are no person images in the request list): pass a list of resize requests for shots without person images.
       4. Generate Video: For every shot image, use the generate_videos_omni tool to generate video.
         - Combine `gcs_uri` values from both `generate_images` and `resize_image` responses (in scene order) as the video generation input list.
+        - Set `transition_buffer_seconds` on EACH request: the storyboard's `transition_buffer_seconds` for every scene EXCEPT the final scene, which must be 0.0 because no transition follows it. Set it per request; never infer it from the position in the list, since a retry may send one scene alone.
       5. Video Concatenation: For every video, use concatenate_videos tool to combine all the videos into a single video.
         - Pass all `gcs_uri` values returned by `generate_videos_omni`, in scene order, as `video_gcs_uris`.
+        - Pass the storyboard's `transition` as `transition`.
+        - Pass the storyboard's `transition_buffer_seconds` as `transition_buffer_seconds`.
+        - Pass each scene's `scene_duration` from the storyboard, in scene order, as `scene_durations`. It must have exactly one entry per video.
       6. Subtitle Script: Use `generate_narrative` on the concatenated video to produce raw ASS subtitle content (`ass_content`).
         - Provide the storyboard JSON as context to help generate accurate and relevant subtitles, in terms of both content and timing.
+        - If users explicitly states their required scripts content, you must include in the tools's prompt.
+        - Pass the `gcs_uri` from `concatenate_videos` as `video_gcs_uri`.
+      7. Voiceover Track: Use `generate_voiceover` with the SAME `ass_content` from step 6 to produce the stitched voiceover audio.
+        - Pass the `voice_profile` from step 6 so the voice fits the video/storyboard context instead of being re-picked from the bare script.
+        - Pass `ass_content` and `voice_profile` from the `generate_narrative` response.
+      8. BGM Track: Use `generate_bgm` to produce a background-music track scored against the concatenated video.
+        - Pass the `gcs_uri` from `concatenate_videos` as `video_gcs_uri`.
+      9. Render Final Video: Use `render_final_video` to mux BGM, voiceover, and subtitle burn-in into the concatenated video in a single render pass. Pass the SAME `ass_content` you used in step 7 so the voiceover and burned-in subtitles stay in sync.
+        - video_gcs_uri: `gcs_uri` from `concatenate_videos`
+        - bgm_gcs_uri: `gcs_uri` from `generate_bgm`
+        - voiceover_gcs_uri: `gcs_uri` from `generate_voiceover`
+        - ass_content: `ass_content` from `generate_narrative`
+
+  Workflow C: Creative Reference-Guided Input: Orchestrator decides the user's request is creative/artistic and does NOT require preserving a specific scene or first frame image.
+    tool list: [select_asset, generate_storyboard_by_text, generate_images, generate_videos_with_references_omni, concatenate_videos, generate_narrative, generate_voiceover, generate_bgm, render_final_video]
+    step:
+      1. Asset Selection: Use select_asset tool to select appropriate assets for the storyboard based on the user's concept.
+        - Parameter Mapping:
+         - assets_folder = {{ingredient_images_folder}}
+      2. Draft Storyboard: Call generate_storyboard_by_text using the user's concept and target duration to create a shot-by-shot script.
+        - Pass the GCS URIs returned by `select_asset` as `asset_images`.
+      3. Generate Reference Images: For every shot in the storyboard, generate multiple reference images (up to 6) that capture different creative angles or aspects of the scene. These images will guide the video generation but are NOT required to be preserved as the first frame.
+        - Craft your own image prompts for each shot, varying the style, angle, or mood to provide rich creative guidance.
+        - Build the `image_generation_request` list from the storyboard: one entry per shot, each with the crafted image prompt and any reference images for that scene.
+      4. Generate Video: For every shot, use the generate_videos_with_references_omni tool to generate video guided by multiple reference images.
+        - Pass the `gcs_uri` values returned by `generate_images` for the corresponding shot as `image_gcs_uris`.
+      5. Video Concatenation: For every video, use concatenate_videos tool to combine all the videos into a single video.
+        - Pass all `gcs_uri` values returned by `generate_videos_with_references_omni`, in scene order, as `video_gcs_uris`.
+      6. Subtitle Script: Use `generate_narrative` on the concatenated video to produce raw ASS subtitle content (`ass_content`).
+        - Pass the generated storyboard JSON via the `storyboard` field so dialogue stays anchored to each scene's intent and timing.
         - If users explicitly states their required scripts content, you must include in the tools's prompt.
         - Pass the `gcs_uri` from `concatenate_videos` as `video_gcs_uri`.
       7. Voiceover Track: Use `generate_voiceover` with the SAME `ass_content` from step 6 to produce the stitched voiceover audio.
@@ -97,6 +139,7 @@ SYSTEM_INSTRUCTION = """
     - Please using all the tools in the workflow step by step.
     - Ensure that you maintain the structure and details of the storyboard throughout the process.
     - You may only use the tools that are in that workflow.
+    - Workflow selection: Use Workflow A or B when the user wants to preserve a specific scene or first frame image. Use Workflow C when the request is creative/artistic and strict scene preservation is not required.
     - If any tool returns an error, Please follow tool error guidelines.
 
   Tool error guidelines:

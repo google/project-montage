@@ -33,7 +33,7 @@ from google.genai import types
 from google.oauth2 import id_token
 from mcp import StdioServerParameters
 from shared.constants import SERVER_CONNECTION_TYPE, SERVER_URL
-from utils.state import before_agent_callback
+from utils.state import after_agent_callback, before_agent_callback
 
 from .system_prompt import SYSTEM_INSTRUCTION
 
@@ -103,6 +103,7 @@ root_agent = LlmAgent(
         "resize_image",
         "generate_videos",
         "generate_videos_omni",
+        "generate_videos_with_references_omni",
         "concatenate_videos",
         "generate_bgm",
         "generate_narrative",
@@ -120,4 +121,5 @@ root_agent = LlmAgent(
     ),
   ),
   before_agent_callback=before_agent_callback,
+  after_agent_callback=after_agent_callback,
 )

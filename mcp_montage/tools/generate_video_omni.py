@@ -22,7 +22,10 @@ from typing import Annotated
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 from schemas import VideoMetadata
-from services.omni_service import generate_video_omni_service
+from services.omni_service import (
+  generate_video_omni_service,
+  generate_video_with_references_omni_service,
+)
 
 
 @dataclass
@@ -59,11 +62,64 @@ class OmniVideoGenerationRequest:
     str,
     Field(
       description=(
-        "Optional domain-specific constraints appended to Gemini call in"
-        " this tool."
+        "Optional domain-specific constraints appended to Gemini call in this tool."  # noqa: E501
       )
     ),
   ] = ""
+  transition_buffer_seconds: Annotated[
+    float,
+    Field(
+      description=(
+        "Extra seconds of footage to generate beyond duration_seconds, for the transition to consume. Use the storyboard's transition_buffer_seconds for every scene EXCEPT the final one, which must pass 0.0 because no transition follows it. Set it per request -- never infer it from position in the list."  # noqa: E501
+      )
+    ),
+  ] = 0.0
+
+
+@dataclass
+class OmniReferenceVideoGenerationRequest:
+  """Request schema for `generate_videos_with_references_omni` tools."""
+
+  image_gcs_uris: Annotated[
+    list[str],
+    Field(description="GCS URIs of 1 to 6 reference images guiding the video."),
+  ]
+  prompt: Annotated[
+    str,
+    Field(description="Text prompt describing the desired video."),
+  ] = ""
+  aspect_ratio: Annotated[
+    str,
+    Field(
+      description=(
+        "Aspect ratio of output video ('16:9', '9:16'). Default to 16:9"
+      )
+    ),
+  ] = "16:9"
+  duration_seconds: Annotated[
+    int,
+    Field(
+      description=(
+        "Desired duration of the generated video in seconds. Default is 6"
+      )
+    ),
+  ] = 6
+  domain_constraints: Annotated[
+    str,
+    Field(
+      description=(
+        "Optional domain-specific constraints appended to Gemini call in this tool."  # noqa: E501
+      )
+    ),
+  ] = ""
+  transition_buffer_seconds: Annotated[
+    float,
+    Field(
+      description=(
+        "Extra seconds of footage to generate beyond duration_seconds, for the transition to consume. Use the storyboard's transition_buffer_seconds for every scene EXCEPT the final one, which must pass 0.0 because no transition follows it. Set it per request -- never infer it from position in the list."  # noqa: E501
+      )
+    ),
+  ] = 0.0
 
 
 def register_generate_video_omni_tool(
@@ -87,6 +143,7 @@ def register_generate_video_omni_tool(
                 - image_gcs_uri (string): GCS URI of the first-frame image used for video generation.
                 - aspect_ratio: Aspect ratio of output video ('16:9' or '9:16'). Default to 16:9
                 - duration_seconds (int): Desired duration of the generated video in seconds.
+                - transition_buffer_seconds (float): Extra seconds generated for the following transition to consume. Pass the storyboard's transition_buffer_seconds for every scene except the last, which passes 0.0.
                 - domain_constraints (string): Optional domain-specific constraints appended to Gemini call in this tool.
 
     Returns:
@@ -126,4 +183,72 @@ def register_generate_video_omni_tool(
         videos.append(res)
 
     logger.info(f"Done generating omni videos: {videos}")
+    return videos
+
+
+def register_generate_video_with_references_omni_tool(
+  mcp: FastMCP, logger: Logger, bucket_name: str
+) -> None:
+  """Register reference-guided generate video omni tool on MCP server."""
+
+  @mcp.tool()
+  async def generate_videos_with_references_omni(
+    requests: list[OmniReferenceVideoGenerationRequest],
+  ) -> list[VideoMetadata]:
+    """
+    Generate videos guided by reference images using Gemini Omni model.
+
+    Support parallel generation of multiple requests.
+
+    Args:
+      requests: A list of OmniReferenceVideoGenerationRequest objects.
+                Each object contains:
+                - image_gcs_uris: GCS URIs of 1 to 6 reference images guiding the video.
+                - prompt (string): A text prompt describing a video.
+                - aspect_ratio: Aspect ratio of output video ('16:9' or '9:16'). Default to 16:9
+                - duration_seconds (int): Desired duration of the generated video in seconds.
+                - transition_buffer_seconds (float): Extra seconds generated for the following transition to consume. Pass the storyboard's transition_buffer_seconds for every scene except the last, which passes 0.0.
+                - domain_constraints (string): Optional domain-specific constraints appended to Gemini call in this tool.
+
+    Returns:
+      A list of video metadata that contains:
+        - gcs_uri: GCS URI of the resulting video.
+        - authenticated_url: URL of the resulting video where user can view.
+
+    Response: The response must explicitly direct the user to the `authenticated_url` to view the resulting video.
+    """  # noqa: E501
+
+    logger.info("Invoking generate_videos_with_references_omni tool.")
+    logger.info(
+      f"Received {len(requests)} reference-guided video generation requests."
+    )
+
+    results = await asyncio.gather(
+      *[
+        generate_video_with_references_omni_service(
+          **asdict(req), output_gcs_uri=f"gs://{bucket_name}/generated_videos"
+        )
+        for req in requests
+      ],
+      return_exceptions=True,
+    )
+
+    videos: list[VideoMetadata] = []
+    for req, res in zip(requests, results, strict=True):
+      if isinstance(res, Exception) or not isinstance(res, VideoMetadata):
+        logger.error(
+          f"Omni reference video generation failed for req: {req}: {res}"
+        )
+        videos.append(
+          VideoMetadata(
+            gcs_uri="",
+            duration_seconds=0.0,
+            status="error",
+            error=str(res),
+          )
+        )
+      else:
+        videos.append(res)
+
+    logger.info(f"Done generating omni reference videos: {videos}")
     return videos

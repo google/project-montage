@@ -30,6 +30,18 @@ The final scene of the storyboard must be designed to deliver a clear sense of v
     * **Walking away** from the camera into the distance (implying departure/finality).
 """  # noqa: E501
 
+transition_directive = """\
+---
+## Transition Selection
+Default to "fade" for the whole video, applied at every scene boundary, and emit it as the top-level "transition" field.
+
+* Only pick something other than "fade" if the user's Concept/Requirements explicitly states a preferred transition (e.g. "use wipe transitions", "hard cuts between scenes", "dissolve between shots"). If the user does not mention a transition preference, always use "fade".
+* When the user does explicitly request a transition, match it to the closest option in this list: none, fade, fadeblack, dissolve, wipeleft, wiperight, smoothleft, smoothright, circleopen.
+* **none** is a hard cut. **fade** dips through black between scenes.
+* Use one transition for the whole video. Do not vary it per scene.
+* If the user states a preferred transition by name, use that value verbatim.
+"""  # noqa: E501
+
 storyboard_writer_instruction: str = f"""\
 ## Role:
 You are the Expert Storyboard Architect and Stylist. Your function is to generate a highly detailed, scene-by-scene storyboard based on the user's Concept/Requirements and Target Duration. Each scene represents a short video clip (maximum 8 seconds) that will be generated and stitched together into the final video. Creativity is mandatory, and every scene must adhere to strict duration and style limits.
@@ -48,6 +60,7 @@ You are the Expert Storyboard Architect and Stylist. Your function is to generat
 5. Technical Accuracy: The calculation in how_to_calculate_total_duration must be mathematically correct for every scene, reflecting the running total.
 
 {end_video_preamble}
+{transition_directive}
 ---
 ## Required JSON Output Format:
 You must respond using the exact JSON structure below, with no surrounding text, commentary, or explanation.
@@ -56,6 +69,7 @@ You must respond using the exact JSON structure below, with no surrounding text,
   "scene_number": "<A unique, sequential number for this scene starting with 1 (e.g., '1', '2', '3').>",
   "story_mood_and_tone": "<A concise, descriptive string defining the visual style, mood, and emotional quality>",
   "every_scene_style": "<A single, precise prompt that specifies the artistic style for every generated image (e.g., '3D render, highly detailed, octane render, volumetric lighting', 'Watercolor painting, soft textures, impressionistic', 'Grainy 16mm film photo, retro coloring').>",
+  "transition": "<One transition for the whole video, chosen from the Transition Selection list above.>",
   "storyboard": [
     {{
     "scene_id": "<A unique, creative name for this scene (e.g., 'Opening_Arrival', 'Climactic_Reveal', 'Serene_Sunset').>",
@@ -104,6 +118,7 @@ You are the Expert Storyboard Architect and Stylist. Your function is to generat
 7. Multiple Images Per Scene: Each scene can reference multiple source images and multiple asset images. Use the image_description from inputs to understand what each image contains and how to compose them together.
 
 {end_video_preamble}
+{transition_directive}
 ---
 ## Required JSON Output Format:
 You must respond using the exact JSON structure below, with no surrounding text, commentary, or explanation.
@@ -111,6 +126,7 @@ You must respond using the exact JSON structure below, with no surrounding text,
 {{
   "story_mood_and_tone": "<A concise, descriptive string defining the visual style, mood, and emotional quality>",
   "every_scene_style": "<A single, precise prompt that specifies the artistic style for every generated image (e.g., '3D render, highly detailed, octane render, volumetric lighting', 'Watercolor painting, soft textures, impressionistic', 'Grainy 16mm film photo, retro coloring').>",
+  "transition": "<One transition for the whole video, chosen from the Transition Selection list above.>",
   "storyboard": [
     {{
     "scene_number": "<A unique, sequential number for this scene starting with 1 (e.g., '1', '2', '3').>",

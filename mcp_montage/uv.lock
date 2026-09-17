@@ -937,7 +937,7 @@ wheels = [
 
 [[package]]
 name = "mcp-montage"
-version = "0.6.2"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "audioop-lts" },

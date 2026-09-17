@@ -15,6 +15,7 @@
 import logging
 import os
 from datetime import timedelta
+from functools import lru_cache
 from typing import Annotated
 
 import google.auth
@@ -29,16 +30,13 @@ load_dotenv()
 
 # Configuration from environment variables
 GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
+# The only bucket this server signs objects for. The service is public, so
+# without this restriction it would sign any object its identity can read.
+GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "")
 SIGNED_URL_EXPIRATION_MINUTES = int(
   os.getenv("SIGNED_URL_EXPIRATION_MINUTES", "60")
 )
 
-# Work around references:
-# - https://stackoverflow.com/a/64245028
-# - https://stackoverflow.com/a/70369296
-credentials, project_id = google.auth.default()
-
-ah_api = FastAPI()
 app = FastAPI()
 app.add_middleware(
   CORSMiddleware,
@@ -48,7 +46,17 @@ app.add_middleware(
   allow_headers=["*"],
 )
 
-app.mount("/_ah", ah_api)
+
+@lru_cache(maxsize=1)
+def get_credentials():
+  """Loads Application Default Credentials on first use, not at import.
+
+  Work around references:
+  - https://stackoverflow.com/a/64245028
+  - https://stackoverflow.com/a/70369296
+  """
+  credentials, _ = google.auth.default()
+  return credentials
 
 
 def get_storage_client():
@@ -57,6 +65,14 @@ def get_storage_client():
     yield storage_client
   finally:
     storage_client.close()
+
+
+def parse_gcs_uri(gcs_uri: str) -> tuple[str, str]:
+  """Splits '<bucket>/<object>' into its bucket and object names."""
+  path_parts = gcs_uri.split("/", 1)
+  if len(path_parts) != 2 or not path_parts[0] or not path_parts[1]:
+    raise ValueError("URI must contain both a bucket and an object name.")
+  return path_parts[0], path_parts[1]
 
 
 def generate_signed_url(
@@ -72,24 +88,15 @@ def generate_signed_url(
   Returns:
       str: The signed URL.
   """
-  # 1. Parse the GCS URI
-  # Remove prefix and split into bucket and object name
-  path_parts = gcs_uri.split("/", 1)
-  if len(path_parts) != 2:
-    raise ValueError("URI must contain both a bucket and an object name.")
+  bucket_name, blob_name = parse_gcs_uri(gcs_uri)
 
-  bucket_name = path_parts[0]
-  blob_name = path_parts[1]
-
-  # 2. Get the bucket and blob
   bucket: storage.Bucket = storage_client.bucket(bucket_name)
   blob: storage.Blob = bucket.blob(blob_name)
 
-  # 3. request credential
-  r = requests.Request()
-  credentials.refresh(r)  # type: ignore
+  # Refresh to obtain an access token for IAM-based signing.
+  credentials = get_credentials()
+  credentials.refresh(requests.Request())  # type: ignore
 
-  # 4. Generate the Signed URL
   url: str = blob.generate_signed_url(
     version="v4",
     expiration=timedelta(minutes=expiration_minutes),
@@ -100,25 +107,28 @@ def generate_signed_url(
   return url
 
 
-@ah_api.get("/warmup")
-def warmup():
-  return ""
-
-
 @app.get("/view")
 def view_storage_object(
   uri: str,
   storage_client: Annotated[storage.Client, Depends(get_storage_client)],
 ):
+  if not GCS_BUCKET_NAME:
+    logging.error("GCS_BUCKET_NAME is not configured; refusing to sign.")
+    raise HTTPException(status_code=500, detail="Internal Server Error")
+
+  try:
+    bucket_name, _ = parse_gcs_uri(uri)
+  except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e)) from e
+
+  if bucket_name != GCS_BUCKET_NAME:
+    raise HTTPException(status_code=403, detail="Bucket is not allowed.")
+
   try:
     signed_url = generate_signed_url(
       storage_client, uri, SIGNED_URL_EXPIRATION_MINUTES
     )
     return RedirectResponse(url=signed_url)
-
-  except ValueError as e:
-    # Catch specific validation errors (e.g. malformed URI)
-    raise HTTPException(status_code=400, detail=str(e)) from e
 
   except Exception as e:
     # Catch unexpected server errors

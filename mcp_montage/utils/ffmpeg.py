@@ -56,6 +56,13 @@ class FfmpegFilters:
     )
 
   @staticmethod
+  def fade_in(duration: float) -> tuple[str, str]:
+    return (
+      f"fade=t=in:st=0:d={duration}",
+      f"afade=t=in:st=0:d={duration}",
+    )
+
+  @staticmethod
   def audio_fade(duration: float, fade_duration: float = 1.0) -> str:
     fade_out_start = max(0, duration - fade_duration)
     return f"[1:a]afade=t=in:st=0:d={fade_duration},afade=t=out:st={fade_out_start}:d={fade_duration}[a]"  # noqa: E501
@@ -67,6 +74,13 @@ class FfmpegFilters:
     force_style: str | None = None,
   ) -> str:
     safe_path = _escape_subtitles_path(subtitle_path)
+    if subtitle_path.lower().endswith(".ass"):
+      options = [f"filename='{safe_path}'"]
+      if fonts_dir:
+        safe_fonts_dir = _escape_subtitles_path(fonts_dir)
+        options.append(f"fontsdir='{safe_fonts_dir}'")
+      return "ass=" + ":".join(options)
+
     options = [f"filename='{safe_path}'"]
     if fonts_dir:
       safe_fonts_dir = _escape_subtitles_path(fonts_dir)
@@ -163,28 +177,52 @@ class FfmpegRunner:
     )
 
   def apply_fade_out(
-    self, input_path: str, output_path: str, duration: float = 1.0
+    self,
+    input_path: str,
+    output_path: str,
+    duration: float = 1.0,
+    include_audio: bool = True,
+    trim_to_seconds: float | None = None,
   ) -> None:
+    """Fades the tail out, optionally truncating the output first.
+
+    `trim_to_seconds` can only shorten: a target beyond the real length is
+    ignored. The fade is positioned against the *kept* length, because a
+    fade placed past the `-t` cut would be discarded entirely and the
+    video would end abruptly at full brightness.
+    """
     video_duration = self.get_video_duration(input_path)
-    start_time = max(0, video_duration - duration)
+    effective_duration = video_duration
+    if trim_to_seconds is not None:
+      effective_duration = min(video_duration, trim_to_seconds)
+
+    start_time = max(0, effective_duration - duration)
     video_filter, audio_filter = FfmpegFilters.fade_out(start_time, duration)
-    self._run(
-      [
-        "-i",
-        input_path,
-        "-vf",
-        video_filter,
-        "-af",
-        audio_filter,
-        "-c:v",
-        "libx264",
-        "-c:a",
-        "aac",
-        "-y",
-        output_path,
-      ],
-      label="fade-out",
-    )
+    args = ["-i", input_path, "-vf", video_filter]
+    if include_audio:
+      args += ["-af", audio_filter, "-c:v", "libx264", "-c:a", "aac"]
+    else:
+      args += ["-an", "-c:v", "libx264"]
+    if trim_to_seconds is not None:
+      args += ["-t", str(effective_duration)]
+    args += ["-y", output_path]
+    self._run(args, label="fade-out")
+
+  def apply_fade_in(
+    self,
+    input_path: str,
+    output_path: str,
+    duration: float = 1.0,
+    include_audio: bool = True,
+  ) -> None:
+    video_filter, audio_filter = FfmpegFilters.fade_in(duration)
+    args = ["-i", input_path, "-vf", video_filter]
+    if include_audio:
+      args += ["-af", audio_filter, "-c:v", "libx264", "-c:a", "aac"]
+    else:
+      args += ["-an", "-c:v", "libx264"]
+    args += ["-y", output_path]
+    self._run(args, label="fade-in")
 
   def merge_audio(
     self,
@@ -598,31 +636,12 @@ class FfmpegRunner:
     has_audio = self.has_audio(video_path)
 
     if has_audio:
-      filter_complex = (
-        "[0:a]aresample=48000,"
-        "aformat=channel_layouts=stereo,"
-        f"volume={video_audio_volume}[bg];"
-        "[1:a]aresample=48000,"
-        "aformat=channel_layouts=stereo,"
-      )
+      vo_padded = f"apad=whole_dur={duration:.3f}"
+      filter_complex = f"[0:a]aresample=48000,aformat=channel_layouts=stereo,volume={video_audio_volume}[bg];[1:a]aresample=48000,aformat=channel_layouts=stereo,"  # noqa: E501
       if audio_ducking:
-        filter_complex += (
-          f"volume={vo_volume},"
-          "asplit=2[vo_sc][vo_mix];"
-          f"[bg][vo_sc]sidechaincompress="
-          f"threshold={ducking_threshold}:"
-          f"ratio={ducking_ratio}:"
-          f"attack={ducking_attack_ms}:"
-          f"release={ducking_release_ms}[ducked];"
-          "[ducked][vo_mix]amix=inputs=2:"
-          "duration=first:dropout_transition=2:normalize=0[a]"
-        )
+        filter_complex += f"volume={vo_volume},{vo_padded},asplit=2[vo_sc][vo_mix];[bg][vo_sc]sidechaincompress=threshold={ducking_threshold}:ratio={ducking_ratio}:attack={ducking_attack_ms}:release={ducking_release_ms}[ducked];[ducked][vo_mix]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[a]"  # noqa: E501
       else:
-        filter_complex += (
-          f"volume={vo_volume}[vo];"
-          "[bg][vo]amix=inputs=2:"
-          "duration=first:dropout_transition=2:normalize=0[a]"
-        )
+        filter_complex += f"volume={vo_volume}[vo];[bg][vo]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[a]"  # noqa: E501
       args = [
         "-i",
         video_path,
@@ -652,11 +671,14 @@ class FfmpegRunner:
         "0:v",
         "-map",
         "1:a",
+        "-af",
+        f"apad=whole_dur={duration:.3f}",
         "-c:v",
         "copy",
         "-c:a",
         "aac",
-        "-shortest",
+        "-t",
+        f"{duration:.3f}",
         "-y",
         output_path,
       ]

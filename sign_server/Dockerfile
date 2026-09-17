@@ -12,11 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-service: default
-runtime: python311
-env: standard
-instance_class: F2
-entrypoint: adk web adk --port=$PORT --verbose
-handlers:
-  - url: /.*
-    script: auto
+FROM python:3.13-slim
+
+# Install uv for dependency management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files first to leverage cache
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Copy application code
+COPY . .
+RUN uv sync --frozen --no-dev
+
+# Expose the port the app runs on
+EXPOSE 8080
+
+# Run from the synced virtualenv so dev dependencies are never installed
+CMD ["/app/.venv/bin/uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]

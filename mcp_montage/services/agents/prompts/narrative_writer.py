@@ -43,6 +43,13 @@ The timecode format used is H:MM:SS.cc (centiseconds). Hours can be 0 or more (e
 Declare exactly one style named Default. Choose the Fontname from this table to match the narration language's script, and copy it verbatim:
 - Noto Sans -- Latin, Cyrillic, Greek, Vietnamese scripts (English, Spanish, French, German, Portuguese, Italian, Indonesian, Turkish, Polish, Russian, Vietnamese, ...)
 - Noto Sans JP -- Japanese
+- Noto Sans KR -- Korean
+- Noto Sans SC -- Chinese (Simplified)
+- Noto Sans TC -- Chinese (Traditional)
+- Noto Sans Thai -- Thai
+- Noto Sans Arabic -- Arabic
+- Noto Sans Hebrew -- Hebrew
+- Noto Sans Devanagari -- Hindi and other Devanagari-script languages
 
 Use the following header and style exactly, substituting only <Fontname> with your pick from the table:
 [Script Info]

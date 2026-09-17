@@ -18,8 +18,13 @@ google-crc32c==1.8.0
 google-resumable-media==2.10.0
 googleapis-common-protos==1.75.0
 h11==0.16.0
+httpcore==1.0.9
 httptools==0.8.0
+httpx==0.28.1
 idna==3.18
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
 proto-plus==1.28.1
 protobuf==7.35.1
 pyasn1==0.6.4
@@ -27,6 +32,8 @@ pyasn1-modules==0.4.2
 pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
 pydantic==2.13.4
 pydantic-core==2.46.4
+pygments==2.21.0
+pytest==9.1.1
 python-dotenv==1.2.2
 pyyaml==6.0.3
 requests==2.34.2

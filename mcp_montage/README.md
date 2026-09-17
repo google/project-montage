@@ -126,6 +126,16 @@ The server will be available at `http://localhost:8001`.
 
 ## Deployment
 
+### Cloud Run
+
+Deploy with the repository-wide script, which syncs the vendored fonts,
+builds on Cloud Build and deploys the server privately. See
+[deploy/README.md](../deploy/README.md).
+
+```sh
+./deploy/deploy.sh --env dev --only mcp
+```
+
 ### Docker
 
 ```sh

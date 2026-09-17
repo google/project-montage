@@ -1924,7 +1924,7 @@ wheels = [
 
 [[package]]
 name = "mcp-client"
-version = "0.4.2"
+version = "0.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },

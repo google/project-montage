@@ -14,7 +14,7 @@
 
 [project]
 name = "mcp-montage"
-version = "0.6.2"
+version = "0.6.4"
 description = "Project Montage: An open-source project for AI video generation."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -29,7 +29,7 @@ dependencies = [
     "pydub>=0.25.1",
     "pyopenssl<26.2.0",
     "python-dotenv>=1.2.2",
-    "torch>=2.13.0",
+    "torch>=2.11,<2.13",
     "torchaudio>=2.11.0",
     "torchcodec>=0.15.0",
     "uvicorn[standard]>=0.51.0",
@@ -54,3 +54,13 @@ packages = ["schemas", "services", "shared", "utils", "tools"]
 
 [tool.uv]
 package = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+torchcodec = { index = "pytorch-cpu" }

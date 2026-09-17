@@ -14,14 +14,18 @@
 
 """State utilities for managing agent state and tool callbacks."""
 
+from __future__ import annotations
+
 import io
 import logging
 import uuid
 
 from google.adk.agents.callback_context import CallbackContext
+from google.genai import types
 from PIL import Image
 from shared.constants import GCS_INGREDIENT_IMAGES_FOLDER
 
+from utils.fork_link import build_fork_link_content
 from utils.storage import upload_image_to_gcs
 
 
@@ -57,3 +61,18 @@ def before_agent_callback(callback_context: CallbackContext) -> None:
       logging.info(
         f"Callback: Uploaded image saved to GCS at {gcs_uri} and state updated."
       )
+
+
+def after_agent_callback(
+  callback_context: CallbackContext,
+) -> types.Content | None:
+  """Appends an in-chat "Fork from here" link to the finished agent turn.
+
+  Returning content here appends an extra event to history rather than
+  replacing the agent's answer. `.session` and `.invocation_id` are both
+  public ReadonlyContext properties; everything else lives in
+  utils/fork_link.py so it can be tested without a live invocation.
+  """
+  return build_fork_link_content(
+    callback_context.session, callback_context.invocation_id
+  )

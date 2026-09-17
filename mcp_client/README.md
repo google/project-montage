@@ -13,8 +13,7 @@ mcp_client/
 ├── utils/               # Client-side utility functions
 ├── pyproject.toml       # Project dependencies
 ├── .env                 # Environment variables
-├── Dockerfile           # Container configuration
-└── app.yaml             # App Engine configuration
+└── Dockerfile           # Container configuration
 ```
 
 ## Installation
@@ -73,6 +72,15 @@ uvicorn server:app
 The web interface will be available at `http://localhost:8000`.
 
 ## Deployment
+
+### Cloud Run
+
+Deploy with the repository-wide script, which builds on Cloud Build and
+wires the client to the MCP server. See [deploy/README.md](../deploy/README.md).
+
+```sh
+./deploy/deploy.sh --env dev --only client
+```
 
 ### Docker
 

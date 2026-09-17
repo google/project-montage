@@ -22,3 +22,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Deployment configs hold project IDs and member lists; share only the example
+deploy/config/*.env
+!deploy/config/example.env

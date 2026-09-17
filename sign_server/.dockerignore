@@ -1,6 +1,6 @@
 .git
 .gitignore
-.dockerignore
+.gcloudignore
 .venv
 __pycache__/
 *.pyc

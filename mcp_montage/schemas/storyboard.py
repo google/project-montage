@@ -34,6 +34,96 @@ def _coerce_duration(value: Any) -> int:
     return 0
 
 
+# The ffmpeg xfade filter names concatenate_videos accepts for a buffered
+# transition, mirrored from ConcatenateVideosRequest.
+KNOWN_XFADE_TRANSITIONS: frozenset[str] = frozenset(
+  {
+    "fade",
+    "wipeleft",
+    "wiperight",
+    "wipeup",
+    "wipedown",
+    "slideleft",
+    "slideright",
+    "slideup",
+    "slidedown",
+    "circlecrop",
+    "rectcrop",
+    "distance",
+    "fadeblack",
+    "fadewhite",
+    "radial",
+    "smoothleft",
+    "smoothright",
+    "smoothup",
+    "smoothdown",
+    "circleopen",
+    "circleclose",
+    "vertopen",
+    "vertclose",
+    "horzopen",
+    "horzclose",
+    "dissolve",
+    "pixelize",
+    "diagtl",
+    "diagtr",
+    "diagbl",
+    "diagbr",
+    "hlslice",
+    "hrslice",
+    "vuslice",
+    "vdslice",
+    "hblur",
+    "fadegrays",
+    "wipetl",
+    "wipetr",
+    "wipebl",
+    "wipebr",
+    "squeezeh",
+    "squeezev",
+    "zoomin",
+    "fadefast",
+    "fadeslow",
+    "hlwind",
+    "hrwind",
+    "vuwind",
+    "vdwind",
+    "coverleft",
+    "coverright",
+    "coverup",
+    "coverdown",
+    "revealleft",
+    "revealright",
+    "revealup",
+    "revealdown",
+  }
+)
+
+TRANSITION_BUFFER_SECONDS: float = 1.0
+
+
+def _coerce_transition(value: Any) -> str:
+  """Normalizes an LLM-provided transition name (defaults to 'fade').
+
+  Falls back to 'fade' for any name that is not a known ffmpeg xfade
+  filter, so an LLM-invented transition fails here instead of after N
+  buffered Omni clips have already been generated for it.
+  """
+  name = str(value).strip().lower() if value is not None else ""
+  if not name:
+    return "fade"
+  if name == "none" or name in KNOWN_XFADE_TRANSITIONS:
+    return name
+  return "fade"
+
+
+def _buffer_for_transition(transition: str) -> float:
+  """Seconds of extra footage each clip needs for this transition."""
+  if transition == "none":
+    return 0.0
+  return TRANSITION_BUFFER_SECONDS
+
+
 @dataclass
 class SceneImage:
   """A reference image composited into a storyboard scene."""
@@ -96,6 +186,18 @@ class Storyboard:
     str,
     Field(description="Top-level scene number emitted by the text variant."),
   ] = ""
+  transition: Annotated[
+    str,
+    Field(
+      description="Transition applied at every scene boundary (e.g. 'fade', 'none', 'dissolve', 'wipeleft')."  # noqa: E501
+    ),
+  ] = "fade"
+  transition_buffer_seconds: Annotated[
+    float,
+    Field(
+      description="Extra seconds each non-final clip must be generated with so the transition consumes buffer instead of real footage. Derived from `transition`; 0.0 only for 'none'. Pass to generate_videos_omni and concatenate_videos."  # noqa: E501
+    ),
+  ] = 0.0
 
   @classmethod
   def from_dict(cls, data: dict[str, Any]) -> Storyboard:
@@ -134,9 +236,12 @@ class Storyboard:
           base_images=base_images,
         )
       )
+    transition = _coerce_transition(data.get("transition"))
     return cls(
       story_mood_and_tone=str(data.get("story_mood_and_tone", "")),
       every_scene_style=str(data.get("every_scene_style", "")),
       storyboard=scenes,
       scene_number=str(data.get("scene_number", "")),
+      transition=transition,
+      transition_buffer_seconds=_buffer_for_transition(transition),
     )

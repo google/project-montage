@@ -533,7 +533,8 @@
   </style>
 </head>
 
-<body class="text-zinc-400 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 overflow-x-hidden mesh-bg">
+<body class="text-zinc-400 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 overflow-x-hidden mesh-bg"
+  data-default-user-id="__DEFAULT_USER_ID__">
   <!-- Ambient physical backdrop -->
   <div
     class="fixed inset-0 -z-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-50">
@@ -773,9 +774,14 @@
         const userIdInput = document.getElementById("user-id-input");
         const openChatButton = document.getElementById("open-chat");
 
+        // Set by the server from Cloud Run IAP's authenticated-user header
+        // (see _inject_default_user_id in server.py). Empty when IAP isn't
+        // in front of this deployment (e.g. local dev), in which case we
+        // fall back to a random suggested name.
+        const iapDefaultUserId = document.body.dataset.defaultUserId;
+
         const updateRandomName = () => {
-          const randomName = generateRandomUserId();
-          userIdInput.value = randomName;
+          userIdInput.value = iapDefaultUserId || generateRandomUserId();
         }
 
         const updateButtonState = () => {

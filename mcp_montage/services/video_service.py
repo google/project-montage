@@ -45,17 +45,172 @@ _FONTS_DIR = os.path.join(
   "consolidated",
 )
 
-_TRANSITION_DURATION = 1.0
+# The dip-to-black fade applied at each clip's own edges on the unbuffered
+# path, and the closing fade over the finished video. These shared 1.0 by
+# coincidence, not by meaning, so they get separate names.
+_SCENE_FADE_DURATION = 1.0
+_CLOSING_FADE_DURATION = 1.0
+
+# Bounds on how much footage a single xfade may consume. The floor keeps
+# xfade valid when Omni returned no surplus at all; the cap stops a badly
+# overshooting clip from turning into a three-second wipe, and keeps the
+# blend shorter than the shortest supported scene (4s) by construction.
+_MIN_TRANSITION_DURATION = 0.3
+_MAX_TRANSITION_DURATION = 2.0
+
+
+def _concat_with_fade_in_out(
+  local_video_paths: list[str], temp_dir: str
+) -> str:
+  """Concatenates clips with a fade-to-black/fade-in-from-black at each
+  boundary instead of blending them.
+
+  Unlike xfade (which overlaps `duration` seconds of real footage from both
+  clips and therefore shortens the combined output), each clip here fades
+  independently at its own edges and clips are then placed back to back at
+  their full original durations -- so total duration is the exact sum of
+  the source clips, with no compensation needed downstream (e.g. in
+  voiceover timing, which is generated against that same original sum).
+
+  Each scene's own embedded audio is dropped here, matching what
+  apply_transition already does for every other named transition -- the
+  concatenated base video stays silent, and voiceover/BGM are mixed in
+  later by render_final_video_service.
+  """
+  scene_count = len(local_video_paths)
+  processed_paths = []
+  for i, path in enumerate(local_video_paths):
+    current = path
+    if i > 0:
+      fadein_path = os.path.join(temp_dir, f"scene_fadein_{i}.mp4")
+      ffmpeg.apply_fade_in(
+        current, fadein_path, _SCENE_FADE_DURATION, include_audio=False
+      )
+      current = fadein_path
+    if i < scene_count - 1:
+      fadeout_path = os.path.join(temp_dir, f"scene_fadeout_{i}.mp4")
+      ffmpeg.apply_fade_out(
+        current, fadeout_path, _SCENE_FADE_DURATION, include_audio=False
+      )
+      current = fadeout_path
+    processed_paths.append(current)
+
+  list_file_path = os.path.join(temp_dir, "scene_filelist.txt")
+  with open(list_file_path, "w") as f:
+    for processed_path in processed_paths:
+      safe_path = processed_path.replace("'", "'\\''")
+      f.write(f"file '{safe_path}'\n")
+
+  concatenated_path = os.path.join(temp_dir, "scene_concat.mp4")
+  ffmpeg.concat_videos_from_listfile(list_file_path, concatenated_path)
+  return concatenated_path
+
+
+def _concat_with_xfade(
+  local_video_paths: list[str],
+  temp_dir: str,
+  transition: str,
+  scene_durations: list[float],
+) -> str:
+  """Chains clips with xfade, spending each clip's generated buffer.
+
+  xfade blends `d` seconds of footage from both clips, so the join costs
+  `d` seconds of output. Clips are generated `buffer` seconds longer than
+  their storyboard duration precisely so the blend eats that surplus
+  rather than real content.
+
+  Because Omni's duration is prompt-steered rather than an API parameter,
+  the surplus is measured, not assumed: `d` is whatever the accumulator
+  holds beyond the net duration planned so far. That keeps the running
+  total tracking the net sum even as clip lengths drift.
+
+  `offset` is derived from the accumulator's measured length rather than
+  written as the running net sum. The two are equal in the healthy case,
+  but once the floor fires the accumulator drops below the net sum, and an
+  offset past the end of input 1 makes xfade produce a broken join rather
+  than a short one.
+  """
+  current_path = local_video_paths[0]
+  net_so_far = scene_durations[0]
+
+  for i, next_path in enumerate(local_video_paths[1:]):
+    accumulated = ffmpeg.get_video_duration(current_path)
+    surplus = accumulated - net_so_far
+    duration = min(
+      max(surplus, _MIN_TRANSITION_DURATION), _MAX_TRANSITION_DURATION
+    )
+    offset = max(0.0, accumulated - duration)
+
+    logger.info(
+      f"Boundary {i}: accumulator={accumulated:.3f}s, net={net_so_far:.3f}s, "
+      f"surplus={surplus:.3f}s, xfade duration={duration:.3f}s, "
+      f"offset={offset:.3f}s"
+    )
+    if surplus < _MIN_TRANSITION_DURATION:
+      deficit = _MIN_TRANSITION_DURATION - surplus
+      logger.warning(
+        f"Boundary {i}: measured surplus ({surplus:.3f}s) is below the "
+        f"{_MIN_TRANSITION_DURATION}s xfade floor by {deficit:.3f}s -- "
+        f"the transition will eat real footage and the output will end "
+        f"up that much shorter than the storyboard's net duration."
+      )
+
+    output_path = os.path.join(temp_dir, f"transition_{i}.mp4")
+    ffmpeg.apply_transition(
+      input_path1=current_path,
+      input_path2=next_path,
+      output_path=output_path,
+      transition=transition,
+      duration=duration,
+      offset=offset,
+    )
+    current_path = output_path
+    net_so_far += scene_durations[i + 1]
+
+  return current_path
 
 
 def concatenate_videos_with_transition(
   video_gcs_uris: list[str],
   output_gcs_uri: str,
   transition: str = "fade",
+  scene_durations: list[float] | None = None,
+  transition_buffer_seconds: float = 0.0,
 ) -> VideoMetadata:
+  """Concatenate video clips together with specified transition effects.
+
+  With a buffer (`transition_buffer_seconds > 0`), every transition type
+  is available: the clips were generated longer than their storyboard
+  durations and xfade consumes that surplus instead of real footage. The
+  result is trimmed back to the sum of `scene_durations`.
+
+  Without a buffer, only "fade" is safe: it dips each clip through black
+  at its own edges and concatenates at full length, so the duration is the
+  exact sum of the sources. Any other transition would blend real footage
+  and silently shorten the video, so it is rejected.
   """
-  Concatenate video clips together with specified transition effects.
-  """
+  if not video_gcs_uris:
+    logger.error("No videos to concatenate")
+    raise ValueError("No videos to concatenate")
+
+  # Validate before spending anything on GCS downloads: a doomed request
+  # (buffer/scene_durations mismatch, or a non-fade transition with no
+  # buffer) must fail before paying for N downloads, not after.
+  buffered = transition_buffer_seconds > 0
+  if buffered:
+    if not scene_durations or len(scene_durations) != len(video_gcs_uris):
+      raise ValueError(
+        f"scene_durations must have one entry per video: got "
+        f"{len(scene_durations or [])} for {len(video_gcs_uris)} "
+        f"videos."
+      )
+  elif transition != "fade":
+    raise ValueError(
+      f"Transition '{transition}' blends real footage and would shorten "
+      f"the video. Pass transition_buffer_seconds (with scene_durations) "
+      f"so the blend has buffer to consume, or use 'fade'/'none'."
+    )
+
   with tempfile.TemporaryDirectory() as temp_dir:
     local_video_paths = []
     for i, uri in enumerate(video_gcs_uris):
@@ -64,32 +219,29 @@ def concatenate_videos_with_transition(
       download_blob_to_file(uri, local_path)
       local_video_paths.append(local_path)
 
-    # Iteratively apply transitions
-    if not local_video_paths:
-      logger.error("No videos to concatenate")
-      raise ValueError("No videos to concatenate")
-
-    current_video_path = local_video_paths[0]
     output_filename = f"concatenated_{int(time.time())}.mp4"
 
-    for i, next_video_path in enumerate(local_video_paths[1:]):
-      temp_output_path = os.path.join(temp_dir, f"transition_{i}.mp4")
-      current_duration = ffmpeg.get_video_duration(current_video_path)
-      offset = max(0, current_duration - _TRANSITION_DURATION)
-
-      ffmpeg.apply_transition(
-        input_path1=current_video_path,
-        input_path2=next_video_path,
-        output_path=temp_output_path,
-        transition=transition,
-        duration=_TRANSITION_DURATION,
-        offset=offset,
+    if buffered:
+      current_video_path = _concat_with_xfade(
+        local_video_paths, temp_dir, transition, scene_durations
       )
-      current_video_path = temp_output_path
+    else:
+      current_video_path = _concat_with_fade_in_out(local_video_paths, temp_dir)
 
     # Apply fade out to the concatenated video
     final_output_path = os.path.join(temp_dir, f"faded_{output_filename}")
-    ffmpeg.apply_fade_out(current_video_path, final_output_path)
+    # On the buffered path the last clip's surplus has no transition to
+    # consume it, so the closing pass trims it away. The trim only ever
+    # shortens: if the floor fired earlier, or Omni undershot the final
+    # unbuffered clip, the accumulator is already at or below the net sum
+    # and this is a no-op. Never pad back up.
+    trim_to = sum(scene_durations) if buffered else None
+    ffmpeg.apply_fade_out(
+      current_video_path,
+      final_output_path,
+      duration=_CLOSING_FADE_DURATION,
+      trim_to_seconds=trim_to,
+    )
 
     with open(final_output_path, "rb") as f:
       video_bytes = f.read()
@@ -218,8 +370,14 @@ async def generate_video_service(
   if domain_constraints:
     contents.append(f"Constraints: {domain_constraints}")
 
-  video_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(agent_name="video_prompt_builder")
-  resp: dict[str, str] = await video_prompt_builder_agent.generate_json_content_async(contents=contents)
+  video_prompt_builder_agent: GeminiAgent = AgentFactory.create_text_agent(
+    agent_name="video_prompt_builder"
+  )
+  resp: dict[
+    str, str
+  ] = await video_prompt_builder_agent.generate_json_content_async(
+    contents=contents
+  )
 
   video_prompt: str = str(resp.get("video_prompt", "")).strip()
 
@@ -279,7 +437,9 @@ def _extract_readable_narrative_lines(ass_content: str) -> list[NarrativeLine]:
 
 def _count_ass_dialogue_lines(ass_content: str) -> int:
   """Counts Dialogue lines under [Events] for romanization validation."""
-  return sum(1 for line in ass_content.splitlines() if line.startswith("Dialogue:"))
+  return sum(
+    1 for line in ass_content.splitlines() if line.startswith("Dialogue:")
+  )
 
 
 async def generate_narrative(
@@ -317,14 +477,18 @@ async def generate_narrative(
   readable_content = _extract_readable_narrative_lines(ass_content)
   dialogue_count = _count_ass_dialogue_lines(ass_content)
   if len(romanization) != dialogue_count:
-    raise ValueError(f"narrative_writer returned {len(romanization)} romanization entries for {dialogue_count} Dialogue lines; they must match 1:1.")
+    raise ValueError(
+      f"narrative_writer returned {len(romanization)} romanization entries for {dialogue_count} Dialogue lines; they must match 1:1."  # noqa: E501
+    )
   logger.info("Generated ASS content with romanization.")
 
   # Cast the voice here, where the storyboard and user prompt give richer
   # context than the bare ASS the voiceover step would otherwise see. The
   # romanized transcript rides along so the pace heuristic can budget on it.
   voice_context_parts = [part for part in (storyboard, prompt) if part]
-  voice_context_parts.append("Romanized transcript (for pacing):\n" + "\n".join(romanization))
+  voice_context_parts.append(
+    "Romanized transcript (for pacing):\n" + "\n".join(romanization)
+  )
   voice_profile = await generate_voice_profile(
     ass_content,
     context="\n\n".join(voice_context_parts),

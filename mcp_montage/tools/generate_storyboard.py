@@ -62,6 +62,12 @@ class StoryBoardGenerationRequest:
       description="Optional domain-specific constraints appended to the storyboard prompt. Leave empty for general-purpose use."  # noqa: E501
     ),
   ] = ""
+  transition: Annotated[
+    str,
+    Field(
+      description="Optional preferred transition between scenes (e.g. 'fade', 'none', 'dissolve'). Leave empty to let the storyboard writer choose."  # noqa: E501
+    ),
+  ] = ""
 
   def __post_init__(self):
     """Validate and enforce constraints after initialization."""
@@ -74,6 +80,9 @@ class StoryBoardGenerationRequest:
       f"**User Context:** {self.user_context}",
       f"**Target Duration:** {self.duration_seconds} seconds",
     ]
+
+    if self.transition:
+      prompt_parts.append(f"**Preferred Transition:** {self.transition}")
 
     if self.source_images:
       prompt_parts.append("## **Source Images:**")
